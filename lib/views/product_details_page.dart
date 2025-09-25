@@ -3,9 +3,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:intl/intl.dart';
 import '../controllers/product_detail_controller.dart';
 import '../controllers/cart_provider.dart';
-
 import '../main_screen.dart';
 
 class ProductDetailsPage extends StatelessWidget {
@@ -27,6 +27,16 @@ class ProductDetailsPage extends StatelessWidget {
           if (controller.isLoading) {
             return Scaffold(
               appBar: AppBar(
+                leading: IconButton(
+                  icon: Image.asset(
+                    'assets/icons/back.png',
+                    width: 24,
+                    height: 24,
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                ),
                 title: Text(name),
                 backgroundColor: Colors.green[300],
                 elevation: 2,
@@ -50,7 +60,24 @@ class ProductDetailsPage extends StatelessWidget {
 
           return Scaffold(
             appBar: AppBar(
-              title: Text(product.title),
+              leading: IconButton(
+                icon: Image.asset(
+                  'assets/icons/back.png',
+                  width: 24,
+                  height: 24,
+                ),
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+              ),
+              title: Text(
+                product.title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  fontSize: 20,
+                ),
+              ),
               backgroundColor: Colors.green[300],
               elevation: 2,
             ),
@@ -133,212 +160,157 @@ class ProductDetailsPage extends StatelessWidget {
                           showDialog(
                             context: context,
                             builder: (BuildContext context) {
-                              return Dialog(
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                insetPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 24,
-                                ),
-                                child: LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    final screenHeight = MediaQuery.of(context).size.height;
-                                    final screenWidth = MediaQuery.of(context).size.width;
+                              // State variables outside the StatefulBuilder
+                              DateTime now = DateTime.now();
+                              List<DateTime> dateList = List.generate(11, (i) => now.add(Duration(days: i)));
+                              DateTime? selectedDate = dateList[0];
+                              DateTime? selectedTime;
+                              String selectedHour = '30min';
+                              double calculatedPrice = product.salePrice;
 
-                                    return ConstrainedBox(
+                              // Time slots generator
+                              List<DateTime> generateTimesForDate(DateTime date) {
+                                bool isToday = date.year == now.year && date.month == now.month && date.day == now.day;
+                                DateTime start = isToday
+                                    ? now.add(Duration(minutes: 30 - (now.minute % 30)))
+                                    : DateTime(date.year, date.month, date.day, 8, 0);
+                                DateTime end = DateTime(date.year, date.month, date.day, 22, 0);
+                                if (start.isAfter(end)) start = DateTime(date.year, date.month, date.day, 8, 0);
+
+                                List<DateTime> times = [];
+                                DateTime current = start;
+                                while (current.isBefore(end) || current.isAtSameMomentAs(end)) {
+                                  times.add(current);
+                                  current = current.add(const Duration(minutes: 30));
+                                }
+                                return times;
+                              }
+
+                              int getMinutesFromHour(String hour) {
+                                if (hour == '30min') return 30;
+                                return int.parse(hour.substring(0, hour.length - 2)) * 60;
+                              }
+
+                              void updatePrice() {
+                                int minutes = getMinutesFromHour(selectedHour);
+                                if (minutes <= 30) {
+                                  calculatedPrice = product.salePrice;
+                                } else {
+                                  calculatedPrice = product.salePrice + (minutes - 30) * product.minPrice;
+                                }
+                              }
+
+                              return StatefulBuilder(
+                                builder: (context, setState) {
+                                  return Dialog(
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                                    child: ConstrainedBox(
                                       constraints: BoxConstraints(
-                                        maxHeight: screenHeight * 0.85,
-                                        maxWidth: screenWidth * 0.95,
+                                        maxHeight: MediaQuery.of(context).size.height * 0.85,
+                                        maxWidth: MediaQuery.of(context).size.width * 0.95,
                                       ),
                                       child: SingleChildScrollView(
                                         padding: const EdgeInsets.all(16.0),
                                         child: Column(
-                                          mainAxisSize: MainAxisSize.min,
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            const Text(
-                                              'Choose Date & Time',
-                                              style: TextStyle(
-                                                fontSize: 20,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
+                                            const Text('Choose Date & Time', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                                             const SizedBox(height: 16),
-                                            const Text(
-                                              'When should the professional arrive?',
-                                              style: TextStyle(fontSize: 16),
-                                            ),
+
+                                            // Date selection
+                                            const Text('Select Date', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                                             const SizedBox(height: 8),
-                                            // Date Selection
                                             Wrap(
-                                              spacing: 8.0,
-                                              runSpacing: 8.0,
-                                              children: [
-                                                for (var date in [
-                                                  'Wed, 24 Sept',
-                                                  'Thu, 25 Sept',
-                                                  'Fri, 26 Sept',
-                                                  'Sat, 27 Sept',
-                                                  'Sun, 28 Sept',
-                                                  'Mon, 29 Sept',
-                                                  'Tue, 30 Sept',
-                                                ])
-                                                  ChoiceChip(
-                                                    label: Text(
-                                                      date,
-                                                      style: const TextStyle(fontSize: 14),
-                                                    ),
-                                                    selected: false,
-                                                    onSelected: (bool selected) {},
-                                                  ),
-                                              ],
+                                              spacing: 8,
+                                              runSpacing: 8,
+                                              children: dateList.map((date) {
+                                                String dateStr = DateFormat('EEE, d MMM').format(date);
+                                                return ChoiceChip(
+                                                  label: Text(dateStr),
+                                                  selected: selectedDate == date,
+                                                  onSelected: (bool selected) {
+                                                    setState(() {
+                                                      selectedDate = date;
+                                                      selectedTime = null;
+                                                    });
+                                                  },
+                                                );
+                                              }).toList(),
                                             ),
                                             const SizedBox(height: 16),
-                                            const Text(
-                                              'Select start time of service',
-                                              style: TextStyle(fontSize: 16),
-                                            ),
+
+                                            // Time selection
+                                            const Text('Select Start Time', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                                             const SizedBox(height: 8),
-                                            // Time Selection
-                                            Wrap(
-                                              spacing: 8.0,
-                                              runSpacing: 8.0,
-                                              children: [
-                                                for (var time in [
-                                                  '5:08 PM',
-                                                  '5:38 PM',
-                                                  '6:08 PM',
-                                                  '6:38 PM',
-                                                  '7:08 PM',
-                                                  '7:38 PM',
-                                                  '8:08 PM',
-                                                  '8:38 PM',
-                                                  '9:08 PM',
-                                                  '9:38 PM',
-                                                  '10:08 PM',
-                                                  '10:38 PM',
-                                                  '11:08 PM',
-                                                  '11:38 PM',
-                                                ])
-                                                  ChoiceChip(
-                                                    label: Text(
-                                                      time,
-                                                      style: const TextStyle(fontSize: 14),
-                                                    ),
-                                                    selected: false,
-                                                    onSelected: (bool selected) {},
-                                                  ),
-                                              ],
-                                            ),
+                                            if (selectedDate != null)
+                                              Wrap(
+                                                spacing: 8,
+                                                runSpacing: 8,
+                                                children: generateTimesForDate(selectedDate!).map((time) {
+                                                  String timeStr = DateFormat('h:mm a').format(time);
+                                                  return ChoiceChip(
+                                                    label: Text(timeStr),
+                                                    selected: selectedTime == time,
+                                                    onSelected: (bool selected) {
+                                                      setState(() {
+                                                        selectedTime = time;
+                                                      });
+                                                    },
+                                                  );
+                                                }).toList(),
+                                              ),
                                             const SizedBox(height: 16),
-                                            const Text(
-                                              'Select service hour',
-                                              style: TextStyle(fontSize: 16),
-                                            ),
+
+                                            // Duration
+                                            const Text('Select Service Duration', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                                             const SizedBox(height: 8),
-                                            // Hour Selection
                                             Wrap(
-                                              spacing: 8.0,
-                                              runSpacing: 8.0,
+                                              spacing: 8,
+                                              runSpacing: 8,
+                                              children: ['30min','1Hr','2Hr','3Hr','4Hr','5Hr','6Hr'].map((hour) {
+                                                return ChoiceChip(
+                                                  label: Text(hour),
+                                                  selected: selectedHour == hour,
+                                                  onSelected: (bool selected) {
+                                                    setState(() {
+                                                      selectedHour = hour;
+                                                      updatePrice();
+                                                    });
+                                                  },
+                                                );
+                                              }).toList(),
+                                            ),
+                                            const SizedBox(height: 16),
+
+                                            Text('Approx Price: ₹${calculatedPrice.toStringAsFixed(0)}', style: TextStyle(fontSize: 16, color: Colors.green[800], fontWeight: FontWeight.bold)),
+                                            const SizedBox(height: 24),
+
+                                            // Buttons
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.end,
                                               children: [
-                                                for (var hour in [
-                                                  '30min',
-                                                  '1Hr',
-                                                  '2Hr',
-                                                  '3Hr',
-                                                  '4Hr',
-                                                  '5Hr',
-                                                  '6Hr',
-                                                ])
-                                                  ChoiceChip(
-                                                    label: Text(
-                                                      hour,
-                                                      style: const TextStyle(fontSize: 14),
-                                                    ),
-                                                    selected: false,
-                                                    onSelected: (bool selected) {},
-                                                  ),
+                                                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                                                const SizedBox(width: 8),
+                                                ElevatedButton(
+                                                  onPressed: () {
+                                                    if (selectedDate == null || selectedTime == null || selectedHour.isEmpty) return;
+                                                    print("Date: $selectedDate, Time: $selectedTime, Duration: $selectedHour, Price: $calculatedPrice");
+                                                  },
+                                                  child: const Text('Add to Cart'),
+                                                ),
                                               ],
-                                            ),
-                                            const SizedBox(height: 16),
-                                            Text(
-                                              'Approx Price: ₹${product.salePrice.toStringAsFixed(0)}',
-                                              style: const TextStyle(
-                                                fontSize: 16,
-                                                color: Colors.red,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 16),
-                                            Padding(
-                                              padding: const EdgeInsets.all(18.0),
-                                              child: Row(
-                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                children: [
-                                                  Row(
-                                                    children: [
-                                                      ElevatedButton(
-                                                        onPressed: () {
-                                                        //   final cartProvider = Provider.of<CartProvider>(context, listen: false);
-                                                        //   cartProvider.addItem(product.title, product.salePrice);
-                                                        //   ScaffoldMessenger.of(context).showSnackBar(
-                                                        //     const SnackBar(
-                                                        //       content: Text('Added to Cart'),
-                                                        //       duration: Duration(seconds: 2),
-                                                        //     ),
-                                                        //   );
-                                                        //   Navigator.pushAndRemoveUntil(
-                                                        //     context,
-                                                        //     MaterialPageRoute(builder: (context) => const MainScreen()),
-                                                        //         (Route<dynamic> route) => false,
-                                                        //   );
-                                                        //
-                                                        },
-                                                        style: ElevatedButton.styleFrom(
-                                                          backgroundColor: Colors.blue,
-                                                          foregroundColor: Colors.white,
-                                                          minimumSize: const Size(100, 36),
-                                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                                          shape: RoundedRectangleBorder(
-                                                            borderRadius: BorderRadius.circular(8),
-                                                          ),
-                                                        ),
-                                                        child: const Text(
-                                                          'Add to Cart',
-                                                          style: TextStyle(fontSize: 14),
-                                                        ),
-                                                      ),
-                                                      const SizedBox(width: 8),
-                                                      ElevatedButton(
-                                                        onPressed: () => Navigator.pop(context),
-                                                        style: ElevatedButton.styleFrom(
-                                                          backgroundColor: Colors.black,
-                                                          foregroundColor: Colors.white,
-                                                          minimumSize: const Size(100, 36),
-                                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                                          shape: RoundedRectangleBorder(
-                                                            borderRadius: BorderRadius.circular(8),
-                                                          ),
-                                                        ),
-                                                        child: const Text(
-                                                          'Book Now',
-                                                          style: TextStyle(fontSize: 14),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ],
-                                              ),
                                             ),
                                           ],
                                         ),
                                       ),
-                                    );
-                                  },
-                                ),
+                                    ),
+                                  );
+                                },
                               );
                             },
                           );
+
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.orange[700],
@@ -365,7 +337,6 @@ class ProductDetailsPage extends StatelessWidget {
                       ),
                       ElevatedButton(
                         onPressed: () {
-                          // Placeholder for Book Now action
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Book Now clicked'),

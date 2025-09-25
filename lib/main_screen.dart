@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shimmer/shimmer.dart';
 
 import 'controllers/home_conroller.dart';
-
 import 'controllers/location_controller.dart';
 import 'controllers/cart_provider.dart';
 import 'views/dashboard_screen.dart';
@@ -27,11 +25,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     GlobalKey<NavigatorState>(),
   ];
 
-  final List<Widget> _screens = [
-    const DashboardScreen(),
-    const MyOrdersScreen(),
-    const MyCartPage(),
-  ];
+  late List<Widget> _screens;
 
   @override
   void initState() {
@@ -40,6 +34,16 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat();
+
+    _initScreens();
+  }
+
+  void _initScreens() {
+    _screens = [
+      _ScreenLoader(animationController: _animationController!, child: const DashboardScreen()),
+      _ScreenLoader(animationController: _animationController!, child: const MyOrdersScreen()),
+      _ScreenLoader(animationController: _animationController!, child: const MyCartPage()),
+    ];
   }
 
   @override
@@ -50,6 +54,10 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
   void _onTabTapped(int index) {
     if (_currentIndex == index) {
+      // Reload screen if current tab tapped again
+      setState(() {
+        _initScreens();
+      });
       _navigatorKeys[index].currentState?.popUntil((route) => route.isFirst);
     } else {
       setState(() {
@@ -126,11 +134,8 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                         value: homeController.selectedLocation,
                         isExpanded: true,
                         icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
-                        onChanged: (val) async {
-                          if (val != null) {
-                            // Call async method without awaiting inside setState
-                            homeController.setLocation(val);
-                          }
+                        onChanged: (val) {
+                          if (val != null) homeController.setLocation(val);
                         },
                         items: locationController.locations.map((loc) {
                           return DropdownMenuItem(
@@ -193,13 +198,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
             _buildOffstageNavigator(0),
             _buildOffstageNavigator(1),
             _buildOffstageNavigator(2),
-            if (homeController.isLoading || locationController.isLoading)
-              Positioned.fill(
-                child: Container(
-                  color: Colors.black.withOpacity(0.3),
-                  child: const Center(child: CircularProgressIndicator(color: Colors.green)),
-                ),
-              ),
           ],
         ),
         bottomNavigationBar: BottomNavigationBar(
@@ -239,76 +237,79 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
   }
 }
 
+/// Loader wrapper for any screen
+class _ScreenLoader extends StatelessWidget {
+  final Widget child;
+  final AnimationController animationController;
+
+  const _ScreenLoader({required this.child, required this.animationController});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder(
+      future: Future.delayed(const Duration(milliseconds: 700)), // simulate loading
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return ModernLoader(animationController: animationController);
+        }
+        return child;
+      },
+    );
+  }
+}
+
+/// Modern Gradient Loader
 class ModernLoader extends StatelessWidget {
-    final AnimationController animationController;
+  final AnimationController animationController;
 
-    const ModernLoader({super.key, required this.animationController});
+  const ModernLoader({super.key, required this.animationController});
 
-    @override
-    Widget build(BuildContext context) {
-      return Center(
-        child: AnimatedBuilder(
-          animation: animationController,
-          builder: (context, child) {
-            return Transform.rotate(
-              angle: animationController.value * 2 * 3.14159,
-              child: Container(
-                width: 70,
-                height: 70,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: SweepGradient(
-                    colors: [
-                      Colors.blueAccent.withOpacity(0.8),
-                      Colors.greenAccent.withOpacity(0.8),
-                      Colors.blueAccent.withOpacity(0.8),
-                    ],
-                    stops: const [0.0, 0.5, 1.0],
-                    startAngle: 0.0,
-                    endAngle: 3.14159 * 2,
-                    transform: GradientRotation(animationController.value * 2 * 3.14159),
-                  ),
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: AnimatedBuilder(
+        animation: animationController,
+        builder: (context, child) {
+          return Transform.rotate(
+            angle: animationController.value * 2 * 3.14159,
+            child: Container(
+              width: 70,
+              height: 70,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: SweepGradient(
+                  colors: [
+                    Colors.blueAccent.withOpacity(0.8),
+                    Colors.greenAccent.withOpacity(0.8),
+                    Colors.blueAccent.withOpacity(0.8),
+                  ],
+                  stops: const [0.0, 0.5, 1.0],
+                  startAngle: 0.0,
+                  endAngle: 3.14159 * 2,
+                  transform: GradientRotation(animationController.value * 2 * 3.14159),
                 ),
-                child: Center(
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Center(
-                      child: Icon(
-                        Icons.refresh,
-                        color: Colors.blueAccent,
-                        size: 24,
-                      ),
+              ),
+              child: Center(
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      Icons.refresh,
+                      color: Colors.blueAccent,
+                      size: 24,
                     ),
                   ),
                 ),
               ),
-            );
-          },
-        ),
-      );
-    }
+            ),
+          );
+        },
+      ),
+    );
   }
-
-  class LoadingNavigatorObserver extends NavigatorObserver {
-    final VoidCallback onPush;
-    final VoidCallback onPop;
-
-    LoadingNavigatorObserver({required this.onPush, required this.onPop});
-
-    @override
-    void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
-      if (previousRoute != null) {
-        onPush();
-      }
-    }
-
-    @override
-    void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
-      onPop();
-    }
-  }
+}

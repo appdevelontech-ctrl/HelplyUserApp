@@ -10,6 +10,7 @@ import 'main_screen.dart';
 
 void main() {
   runApp(const MyApp());
+  print ('hello');
 }
 
 class MyApp extends StatelessWidget {

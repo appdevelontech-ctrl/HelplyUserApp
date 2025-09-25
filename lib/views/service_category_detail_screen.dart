@@ -26,6 +26,16 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
           if (controller.isLoading) {
             return Scaffold(
               appBar: AppBar(
+                leading: IconButton(
+                  icon: Image.asset(
+                    'assets/icons/back.png',
+                    width: 24,
+                    height: 24,
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
+                ),
                 title: const Text(
                   'Loading...',
                   style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 20),
@@ -56,9 +66,23 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
 
           return Scaffold(
             appBar: AppBar(
+              leading: IconButton(
+                icon: Image.asset(
+                  'assets/icons/back.png',
+                  width: 24,
+                  height: 24,
+                ),
+                onPressed: () {
+                  Navigator.pop(context);
+                },
+              ),
               title: Text(
                 mainCategory.title,
-                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 20),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  fontSize: 20,
+                ),
               ),
               backgroundColor: Colors.green[300],
               elevation: 2,
