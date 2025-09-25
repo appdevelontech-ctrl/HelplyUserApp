@@ -2,235 +2,443 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:user_app/widgets/product_card.dart';
 
 import '../controllers/home_conroller.dart';
-import '../widgets/service_category_card.dart';
+import '../widgets/service_category.dart';
 import '../widgets/offer_card.dart';
 
-
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProviderStateMixin {
+  bool _showSuggestion = true; // Flag to show suggestion on first load
+  AnimationController? _animationController;
+  Animation<double>? _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize animation controller for fade effect
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController!, curve: Curves.easeInOut),
+    );
+
+    // Start animation if suggestion should be shown
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final controller = Provider.of<HomeController>(context, listen: false);
+      if (controller.selectedLocation == "Select Location" && _showSuggestion) {
+        _animationController?.forward();
+        // Auto-dismiss after 5 seconds
+        Future.delayed(const Duration(seconds: 5), () {
+          if (mounted) {
+            setState(() {
+              _showSuggestion = false;
+            });
+            _animationController?.reverse();
+          }
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _animationController?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<HomeController>(
       builder: (context, controller, _) {
-        final currentServices =
-            controller.servicesByLocation[controller.selectedLocation] ?? [];
+        final currentServices = controller.servicesByLocation[controller.selectedLocation] ?? [];
 
-        return RefreshIndicator(
-          onRefresh: controller.refreshData,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Hero banner
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: CachedNetworkImage(
-                    imageUrl:
-                    "https://backend-olxs.onrender.com/uploads/new/image-1758194895880.webp",
-                    width: double.infinity,
-                    height: 180,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Shimmer.fromColors(
-                      baseColor: Colors.grey[300]!,
-                      highlightColor: Colors.grey[100]!,
-                      child: Container(
-                        width: double.infinity,
-                        height: 180,
-                        color: Colors.grey[300],
-                      ),
-                    ),
-                    errorWidget: (context, url, error) => Image.asset(
-                      'assets/images/fallback_image.webp',
-                      width: double.infinity,
-                      height: 180,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // Services by Location
-                if (controller.selectedLocation != "Select Location") ...[
-                  Text(
-                    "All Our House Help Services in ${controller.selectedLocation}",
-                    style: Theme.of(context).textTheme.titleLarge,textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 12),
-                  GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: controller.isLoading
-                        ? 4
-                        : currentServices.length, // 4 placeholders
-                    gridDelegate:
-                    const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 8,
-                      mainAxisSpacing: 8,
-                      childAspectRatio: 0.8,
-                    ),
-                    itemBuilder: (context, i) {
-                      if (controller.isLoading) {
-                        return Card(
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
-                          child: Column(
-                            children: [
-                              Container(
-                                height: 80,
+        return Stack(
+          children: [
+            RefreshIndicator(
+              onRefresh: controller.refreshData,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 🔹 Hero Banner with gradient overlay
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Stack(
+                        children: [
+                          CachedNetworkImage(
+                            imageUrl:
+                            "https://backend-olxs.onrender.com/uploads/new/image-1758194895880.webp",
+                            width: double.infinity,
+                            height: 200,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Shimmer.fromColors(
+                              baseColor: Colors.grey[300]!,
+                              highlightColor: Colors.grey[100]!,
+                              child: Container(
                                 width: double.infinity,
+                                height: 200,
                                 color: Colors.grey[300],
                               ),
-                              Padding(
-                                padding: const EdgeInsets.all(4),
-                                child: Container(
-                                  height: 16,
-                                  width: double.infinity,
-                                  color: Colors.grey[300],
-                                ),
-                              ),
-                            ],
+                            ),
+                            errorWidget: (context, url, error) => Image.asset(
+                              'assets/images/fallback_image.webp',
+                              width: double.infinity,
+                              height: 200,
+                              fit: BoxFit.cover,
+                            ),
                           ),
-                        );
-                      } else {
-                        final s = currentServices[i];
-                        return ServiceCategoryCard(
-                          title: s.title,
-                          imageUrl: s.imageUrl,
-                        );
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                ],
-
-                // Best Offers
-                Text("Best Offers", style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 240,
-                  child: controller.isLoading
-                      ? Shimmer.fromColors(
-                    baseColor: Colors.grey[300]!,
-                    highlightColor: Colors.grey[100]!,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: 4,
-                      itemBuilder: (context, i) {
-                        return Container(
-                          width: 250,
-                          margin: const EdgeInsets.only(right: 12),
-                          child: Card(
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
+                          Container(
+                            height: 200,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Colors.black.withOpacity(0.5), Colors.transparent],
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: 20,
+                            bottom: 20,
                             child: Column(
-                              crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Container(
-                                  height: 130,
-                                  width: double.infinity,
-                                  color: Colors.grey[300],
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.all(8),
-                                  child: Container(
-                                    height: 20,
-                                    width: 150,
-                                    color: Colors.grey[300],
+                                Text(
+                                  "Find Trusted Help",
+                                  style: Theme.of(context).textTheme.headlineSmall!.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                Padding(
-                                  padding:
-                                  const EdgeInsets.symmetric(
-                                      horizontal: 8),
-                                  child: Container(
-                                    height: 15,
-                                    width: 100,
-                                    color: Colors.grey[300],
+                                const SizedBox(height: 6),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.orangeAccent,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
                                   ),
+                                  onPressed: () {},
+                                  child: const Text("Explore Now"),
                                 ),
                               ],
                             ),
                           ),
-                        );
-                      },
-                    ),
-                  )
-                      : ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: controller.bestOffers.length,
-                    itemBuilder: (context, i) {
-                      final offer = controller.bestOffers[i];
-                      return OfferCard(
-                        title: offer.title,
-                        subtitle: offer.subtitle,
-                        imageUrl: offer.imageUrl,
-                      );
-                    },
-                  ),
-                ),
-
-
-                // Footer
-                const SizedBox(height: 20),
-                Container(
-                  color: Colors.blue.shade50,
-                  padding: const EdgeInsets.all(20),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              "One Stop for All Household Help",
-                              style: TextStyle(
-                                  fontSize: 22, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 10),
-                            const Text(
-                                "Book trusted house help services anytime and anywhere. Reliable and affordable."),
-                            const SizedBox(height: 10),
-                            ElevatedButton(
-                                onPressed: () {}, child: const Text("Book Now")),
-                          ],
-                        ),
+                        ],
                       ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: CachedNetworkImage(
-                          imageUrl:
-                          "https://backend-olxs.onrender.com/uploads/new/image-1758104213573.png",
-                          fit: BoxFit.contain,
-                          placeholder: (context, url) =>
-                              Shimmer.fromColors(
-                                baseColor: Colors.grey[300]!,
-                                highlightColor: Colors.grey[100]!,
-                                child: Container(
-                                  height: 100,
-                                  color: Colors.grey[300],
+                    ),
+                    const SizedBox(height: 20),
+                    // 🔹 Services by Location
+                    if (controller.selectedLocation != "Select Location") ...[
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.home_repair_service, color: Colors.blueAccent, size: 22),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: RichText(
+                                  text: TextSpan(
+                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 16,
+                                      color: Colors.black87,
+                                    ),
+                                    children: [
+                                      const TextSpan(text: "All Our House Help Services in "),
+                                      TextSpan(
+                                        text: controller.selectedLocation,
+                                        style: const TextStyle(
+                                          color: Colors.blueAccent,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                          errorWidget: (context, url, error) =>
-                              Image.asset(
-                                'assets/images/fallback_image.webp',
-                                fit: BoxFit.contain,
-                              ),
-                        ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          // 🔹 Service Grid
+                          GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: controller.isLoading ? 4 : currentServices.length,
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: 0.85,
+                            ),
+                            itemBuilder: (context, i) {
+                              if (controller.isLoading) {
+                                return Card(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Shimmer.fromColors(
+                                    baseColor: Colors.grey[300]!,
+                                    highlightColor: Colors.grey[100]!,
+                                    child: Column(
+                                      children: [
+                                        Container(
+                                          height: 100,
+                                          width: double.infinity,
+                                          color: Colors.grey[300],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Container(
+                                          height: 14,
+                                          width: 80,
+                                          color: Colors.grey[300],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              } else {
+                                final s = currentServices[i];
+                                return ServiceCategoryCard(
+                                  title: s.title,
+                                  imageUrl: s.imageUrl,
+                                );
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 20),
+                        ],
                       ),
                     ],
+                    // 🔹 Best Offers
+                    Text(
+                      "Best Offers",
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 250,
+                      child: controller.isLoading
+                          ? Shimmer.fromColors(
+                        baseColor: Colors.grey[300]!,
+                        highlightColor: Colors.grey[100]!,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: 4,
+                          itemBuilder: (context, i) {
+                            return Container(
+                              width: 240,
+                              margin: const EdgeInsets.only(right: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            );
+                          },
+                        ),
+                      )
+                          : ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: controller.bestOffers.length,
+                        itemBuilder: (context, i) {
+                          final offer = controller.bestOffers[i];
+                          return Container(
+                            margin: const EdgeInsets.only(right: 12),
+                            child: HoverEffect(
+                              child: OfferCard(
+                                title: offer.title,
+                                subtitle: offer.subtitle,
+                                imageUrl: offer.imageUrl,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    // 🔹 Footer Section
+                    const SizedBox(height: 30),
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Colors.blue.shade400, Colors.blue.shade600],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      padding: const EdgeInsets.all(20),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  "One Stop for All Household Help",
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                const Text(
+                                  "Book trusted house help services anytime and anywhere. Reliable and affordable.",
+                                  style: TextStyle(color: Colors.white70),
+                                ),
+                                const SizedBox(height: 12),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.orangeAccent,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  onPressed: () {},
+                                  child: const Text("Book Now"),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 20),
+                          Expanded(
+                            child: CachedNetworkImage(
+                              imageUrl:
+                              "https://backend-olxs.onrender.com/uploads/new/image-1758104213573.png",
+                              fit: BoxFit.contain,
+                              placeholder: (context, url) => Shimmer.fromColors(
+                                baseColor: Colors.grey[300]!,
+                                highlightColor: Colors.grey[100]!,
+                                child: Container(height: 100),
+                              ),
+                              errorWidget: (context, url, error) => Image.asset(
+                                'assets/images/fallback_image.webp',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // 🔹 Suggestion Overlay
+            if (_showSuggestion && controller.selectedLocation == "Select Location")
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: FadeTransition(
+                  opacity: _fadeAnimation!,
+                  child: GestureDetector(
+                    onTap: () {
+                      // Dismiss suggestion when tapped
+                      setState(() {
+                        _showSuggestion = false;
+                      });
+                      _animationController?.reverse();
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.blueAccent.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black26,
+                            blurRadius: 8,
+                            offset: Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.location_on, color: Colors.white, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              "Please select a location from the top bar to view services",
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                            onPressed: () {
+                              setState(() {
+                                _showSuggestion = false;
+                              });
+                              _animationController?.reverse();
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ],
-            ),
-          ),
+              ),
+          ],
         );
       },
+    );
+  }
+}
+
+/// 🔹 Hover Effect Wrapper Widget
+class HoverEffect extends StatefulWidget {
+  final Widget child;
+  const HoverEffect({super.key, required this.child});
+
+  @override
+  State<HoverEffect> createState() => _HoverEffectState();
+}
+
+class _HoverEffectState extends State<HoverEffect> {
+  bool _hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 200),
+        scale: _hovering ? 1.05 : 1.0,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          decoration: BoxDecoration(
+            boxShadow: _hovering
+                ? [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              )
+            ]
+                : [],
+          ),
+          child: widget.child,
+        ),
+      ),
     );
   }
 }

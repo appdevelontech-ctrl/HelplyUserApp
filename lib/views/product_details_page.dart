@@ -3,16 +3,17 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:provider/provider.dart';
 import 'package:user_app/main_screen.dart';
-import '../controllers/service_detail_controller.dart';
-import '../models/Service.dart';
+import '../controllers/product_detail_controller.dart';
+import '../controllers/service_category_detail_controller.dart';
+import '../models/serviceCategoryDetail.dart';
 import '../controllers/cart_provider.dart';
 
-class ServiceDetailPage extends StatelessWidget {
-  final Service service;
-  final ServiceDetailController controller;
+class ProductDetailsPage extends StatelessWidget {
+  final Servicecategorydetail service;
+  final ProductDetailController controller;
 
-  ServiceDetailPage({super.key, required this.service})
-      : controller = ServiceDetailController(service);
+  ProductDetailsPage({super.key, required this.service})
+      : controller = ProductDetailController(service);
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +22,7 @@ class ServiceDetailPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(service.name),
-        backgroundColor: Colors.green[700],
+        backgroundColor: Colors.green[300],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),

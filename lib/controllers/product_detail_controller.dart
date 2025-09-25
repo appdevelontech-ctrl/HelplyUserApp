@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import '../models/Service.dart';
-import '../models/ServiceDetail.dart';
+import '../models/serviceCategoryDetail.dart';
+import '../models/ProductDetail.dart';
 
-class ServiceDetailController extends ChangeNotifier {
-  late ServiceDetail _serviceDetail;
+class ProductDetailController extends ChangeNotifier {
+  late Productdetail _productdetail;
 
-  ServiceDetailController(Service service) {
+  ProductDetailController(Servicecategorydetail service) {
     try {
-      _serviceDetail = ServiceDetail(
-        service: service,
+      _productdetail = Productdetail(
+        servicecategorydetail: service,
         features: [
           '🚿 Quick & Efficient – Basic cleaning completed in minimal time.',
           '🧴 Hygienic Cleaning – Pot, sink, tiles, mirror, and exhaust fan covered.',
@@ -62,8 +62,8 @@ class ServiceDetailController extends ChangeNotifier {
     } catch (e) {
       debugPrint('Error initializing ServiceDetail: $e');
       // Fallback to a default ServiceDetail if initialization fails
-      _serviceDetail = ServiceDetail(
-        service: service,
+      _productdetail = Productdetail(
+        servicecategorydetail: service,
         features: [],
         whatIsIncluded: [],
         whatIsExcluded: [],
@@ -72,16 +72,16 @@ class ServiceDetailController extends ChangeNotifier {
     }
   }
 
-  ServiceDetail get serviceDetail => _serviceDetail;
+  Productdetail get serviceDetail => _productdetail;
 
   // Optional: Method to update service detail if needed
-  void updateServiceDetail(Service newService) {
-    _serviceDetail = ServiceDetail(
-      service: newService,
-      features: _serviceDetail.features,
-      whatIsIncluded: _serviceDetail.whatIsIncluded,
-      whatIsExcluded: _serviceDetail.whatIsExcluded,
-      specifications: _serviceDetail.specifications,
+  void updateServiceDetail(Servicecategorydetail newService) {
+    _productdetail = Productdetail(
+      servicecategorydetail: newService,
+      features: _productdetail.features,
+      whatIsIncluded: _productdetail.whatIsIncluded,
+      whatIsExcluded: _productdetail.whatIsExcluded,
+      specifications: _productdetail.specifications,
     );
     notifyListeners();
   }

@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
-import '../models/Service.dart'; // Ensure correct import path
+import '../models/serviceCategoryDetail.dart'; // Ensure correct import path
 
-class ServiceCard extends StatelessWidget {
-  final Service service;
+class ProductCard extends StatelessWidget {
+  final Servicecategorydetail service;
   final VoidCallback? onTap; // ✅ Add onTap callback
 
 
-  const ServiceCard({super.key, required this.service,this.onTap});
+  const ProductCard({super.key, required this.service,this.onTap});
 
   @override
   Widget build(BuildContext context) {

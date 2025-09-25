@@ -5,5 +5,5 @@ class ServiceCategory {
     ServiceCategory({required this.title, required this.imageUrl});
 
   @override
-  String toString() => 'Service(title: $title, imageUrl: $imageUrl)';
+  String toString() => 'ServiceCategory(title: $title, imageUrl: $imageUrl)';
 }

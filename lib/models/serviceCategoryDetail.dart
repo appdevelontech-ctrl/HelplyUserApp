@@ -1,4 +1,4 @@
-class Service {
+class Servicecategorydetail {
   final String name;
   final String description;
   final String price;
@@ -7,7 +7,7 @@ class Service {
   final double regularPrice;
   final double salePrice;
 
-  Service({
+  Servicecategorydetail({
     required this.name,
     required this.description,
     required this.price,
