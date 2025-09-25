@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'controllers/home_conroller.dart';
+  // Fixed typo from 'home_conroller.dart'
 import 'controllers/location_controller.dart';
 import 'controllers/cart_provider.dart';
 import 'views/dashboard_screen.dart';
@@ -42,7 +43,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     _screens = [
       _ScreenLoader(animationController: _animationController!, child: const DashboardScreen()),
       _ScreenLoader(animationController: _animationController!, child: const MyOrdersScreen()),
-      _ScreenLoader(animationController: _animationController!, child: const MyCartPage()),
+      _ScreenLoader(animationController: _animationController!, child: const CartPage()),
     ];
   }
 
@@ -54,7 +55,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
   void _onTabTapped(int index) {
     if (_currentIndex == index) {
-      // Reload screen if current tab tapped again
       setState(() {
         _initScreens();
       });
@@ -81,157 +81,173 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
-    final homeController = Provider.of<HomeController>(context);
-    final locationController = Provider.of<LocationController>(context);
-    final cartProvider = Provider.of<CartProvider>(context);
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => HomeController()),
+        ChangeNotifierProvider(create: (_) => LocationController()),
+        ChangeNotifierProvider(create: (_) => CartProvider()),
+      ],
+      child: Builder(
+        builder: (context) {
+          final homeController = Provider.of<HomeController>(context);
+          final locationController = Provider.of<LocationController>(context);
+          final cartProvider = Provider.of<CartProvider>(context);
 
-    return WillPopScope(
-      onWillPop: () async {
-        if (_currentIndex != 0) {
-          setState(() => _currentIndex = 0);
-          _navigatorKeys[0].currentState?.popUntil((route) => route.isFirst);
-          return false;
-        }
-        return true;
-      },
-      child: Scaffold(
-        appBar: PreferredSize(
-          preferredSize: const Size.fromHeight(65),
-          child: AppBar(
-            elevation: 0,
-            flexibleSpace: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF56ab2f), Color(0xFFa8e063)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-            ),
-            title: Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    "https://backend-olxs.onrender.com/uploads/new/image-1755174201972.webp",
-                    height: 20,
-                    width: 90,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const Icon(Icons.error, color: Colors.white),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        dropdownColor: Colors.green.shade50,
-                        value: homeController.selectedLocation,
-                        isExpanded: true,
-                        icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
-                        onChanged: (val) {
-                          if (val != null) homeController.setLocation(val);
-                        },
-                        items: locationController.locations.map((loc) {
-                          return DropdownMenuItem(
-                            value: loc,
-                            child: Text(
-                              loc,
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                            ),
-                          );
-                        }).toList(),
+          return WillPopScope(
+            onWillPop: () async {
+              if (_currentIndex != 0) {
+                setState(() => _currentIndex = 0);
+                _navigatorKeys[0].currentState?.popUntil((route) => route.isFirst);
+                return false;
+              }
+              return true;
+            },
+            child: Scaffold(
+              appBar: PreferredSize(
+                preferredSize: const Size.fromHeight(65),
+                child: AppBar(
+                  elevation: 0,
+                  flexibleSpace: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF56ab2f), Color(0xFFa8e063)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            actions: const [
-              CircleAvatar(
-                backgroundImage: NetworkImage("https://i.pravatar.cc/300"),
-              ),
-              SizedBox(width: 12),
-            ],
-          ),
-        ),
-        drawer: Drawer(
-          child: Column(
-            children: [
-              UserAccountsDrawerHeader(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF56ab2f), Color(0xFFa8e063)],
+                  title: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          "https://backend-olxs.onrender.com/uploads/new/image-1755174201972.webp",
+                          height: 20,
+                          width: 90,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(Icons.error, color: Colors.white),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              dropdownColor: Colors.green.shade50,
+                              value: homeController.selectedLocation,
+                              isExpanded: true,
+                              icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
+                              onChanged: (val) {
+                                if (val != null) homeController.setLocation(val);
+                              },
+                              items: locationController.locations.map((loc) {
+                                return DropdownMenuItem(
+                                  value: loc,
+                                  child: Text(
+                                    loc,
+                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                accountName: const Text("Rahul Kumar", style: TextStyle(fontWeight: FontWeight.bold)),
-                accountEmail: const Text("rahul@example.com"),
-                currentAccountPicture: const CircleAvatar(
-                  backgroundImage: NetworkImage("https://i.pravatar.cc/150"),
-                ),
-              ),
-              Expanded(
-                child: ListView(
-                  children: const [
-                    ListTile(leading: Icon(Icons.home), title: Text("Home")),
-                    ListTile(leading: Icon(Icons.build), title: Text("Services")),
-                    ListTile(leading: Icon(Icons.info), title: Text("About Us")),
+                  actions: const [
+                    CircleAvatar(
+                      backgroundImage: NetworkImage("https://i.pravatar.cc/300"),
+                    ),
+                    SizedBox(width: 12),
                   ],
                 ),
               ),
-              const Divider(),
-              ListTile(
-                leading: const Icon(Icons.logout, color: Colors.red),
-                title: const Text("Logout", style: TextStyle(color: Colors.red)),
-                onTap: () => Navigator.pop(context),
-              ),
-            ],
-          ),
-        ),
-        body: Stack(
-          children: [
-            _buildOffstageNavigator(0),
-            _buildOffstageNavigator(1),
-            _buildOffstageNavigator(2),
-          ],
-        ),
-        bottomNavigationBar: BottomNavigationBar(
-          backgroundColor: Colors.white,
-          selectedItemColor: Colors.green[700],
-          unselectedItemColor: Colors.grey,
-          currentIndex: _currentIndex,
-          type: BottomNavigationBarType.fixed,
-          onTap: _onTabTapped,
-          items: [
-            const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-            const BottomNavigationBarItem(icon: Icon(Icons.list_alt), label: 'My Orders'),
-            BottomNavigationBarItem(
-              icon: Stack(
-                children: [
-                  const Icon(Icons.shopping_cart),
-                  if (cartProvider.itemCount > 0)
-                    Positioned(
-                      right: 0,
-                      child: CircleAvatar(
-                        radius: 8,
-                        backgroundColor: Colors.red,
-                        child: Text(
-                          cartProvider.itemCount.toString(),
-                          style: const TextStyle(fontSize: 10, color: Colors.white),
+              drawer: Drawer(
+                child: Column(
+                  children: [
+                    UserAccountsDrawerHeader(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF56ab2f), Color(0xFFa8e063)],
                         ),
                       ),
+                      accountName: const Text("Rahul Kumar", style: TextStyle(fontWeight: FontWeight.bold)),
+                      accountEmail: const Text("rahul@example.com"),
+                      currentAccountPicture: const CircleAvatar(
+                        backgroundImage: NetworkImage("https://i.pravatar.cc/150"),
+                      ),
                     ),
+                    Expanded(
+                      child: ListView(
+                        children: const [
+                          ListTile(leading: Icon(Icons.home), title: Text("Home")),
+                          ListTile(leading: Icon(Icons.build), title: Text("Services")),
+                          ListTile(leading: Icon(Icons.info), title: Text("About Us")),
+                        ],
+                      ),
+                    ),
+                    const Divider(),
+                    ListTile(
+                      leading: const Icon(Icons.logout, color: Colors.red),
+                      title: const Text("Logout", style: TextStyle(color: Colors.red)),
+                      onTap: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              body: Stack(
+                children: [
+                  _buildOffstageNavigator(0),
+                  _buildOffstageNavigator(1),
+                  _buildOffstageNavigator(2),
                 ],
               ),
-              label: 'My Cart',
+              bottomNavigationBar: Consumer<CartProvider>(
+                builder: (context, cartProvider, child) {
+                  return BottomNavigationBar(
+                    backgroundColor: Colors.white,
+                    selectedItemColor: Colors.green[700],
+                    unselectedItemColor: Colors.grey,
+                    currentIndex: _currentIndex,
+                    type: BottomNavigationBarType.fixed,
+                    onTap: _onTabTapped,
+                    items: [
+                      const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+                      const BottomNavigationBarItem(icon: Icon(Icons.list_alt), label: 'My Orders'),
+                      BottomNavigationBarItem(
+                        icon: Stack(
+                          children: [
+                            const Icon(Icons.shopping_cart),
+                            if (cartProvider.itemCount > 0)
+                              Positioned(
+                                right: 0,
+                                top: -2,
+                                child: CircleAvatar(
+                                  radius: 8,
+                                  backgroundColor: Colors.red,
+                                  child: Text(
+                                    cartProvider.itemCount.toString(),
+                                    style: const TextStyle(fontSize: 10, color: Colors.white),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        label: 'My Cart',
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

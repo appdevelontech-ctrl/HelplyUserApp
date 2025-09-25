@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../controllers/product_detail_controller.dart';
 import '../controllers/cart_provider.dart';
 import '../main_screen.dart';
+import '../models/serviceCategoryDetail.dart';
 
 class ProductDetailsPage extends StatelessWidget {
   final String slug;
@@ -86,7 +87,6 @@ class ProductDetailsPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Image
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: CachedNetworkImage(
@@ -108,7 +108,6 @@ class ProductDetailsPage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // Title + Price
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -151,7 +150,6 @@ class ProductDetailsPage extends StatelessWidget {
                     style: TextStyle(color: Colors.grey[600], fontSize: 14),
                   ),
                   const SizedBox(height: 20),
-                  // Buttons
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
@@ -160,7 +158,6 @@ class ProductDetailsPage extends StatelessWidget {
                           showDialog(
                             context: context,
                             builder: (BuildContext context) {
-                              // State variables outside the StatefulBuilder
                               DateTime now = DateTime.now();
                               List<DateTime> dateList = List.generate(11, (i) => now.add(Duration(days: i)));
                               DateTime? selectedDate = dateList[0];
@@ -168,7 +165,6 @@ class ProductDetailsPage extends StatelessWidget {
                               String selectedHour = '30min';
                               double calculatedPrice = product.salePrice;
 
-                              // Time slots generator
                               List<DateTime> generateTimesForDate(DateTime date) {
                                 bool isToday = date.year == now.year && date.month == now.month && date.day == now.day;
                                 DateTime start = isToday
@@ -217,8 +213,6 @@ class ProductDetailsPage extends StatelessWidget {
                                           children: [
                                             const Text('Choose Date & Time', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                                             const SizedBox(height: 16),
-
-                                            // Date selection
                                             const Text('Select Date', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                                             const SizedBox(height: 8),
                                             Wrap(
@@ -239,8 +233,6 @@ class ProductDetailsPage extends StatelessWidget {
                                               }).toList(),
                                             ),
                                             const SizedBox(height: 16),
-
-                                            // Time selection
                                             const Text('Select Start Time', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                                             const SizedBox(height: 8),
                                             if (selectedDate != null)
@@ -261,14 +253,12 @@ class ProductDetailsPage extends StatelessWidget {
                                                 }).toList(),
                                               ),
                                             const SizedBox(height: 16),
-
-                                            // Duration
                                             const Text('Select Service Duration', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                                             const SizedBox(height: 8),
                                             Wrap(
                                               spacing: 8,
                                               runSpacing: 8,
-                                              children: ['30min','1Hr','2Hr','3Hr','4Hr','5Hr','6Hr'].map((hour) {
+                                              children: ['30min', '1Hr', '2Hr', '3Hr', '4Hr', '5Hr', '6Hr'].map((hour) {
                                                 return ChoiceChip(
                                                   label: Text(hour),
                                                   selected: selectedHour == hour,
@@ -282,11 +272,8 @@ class ProductDetailsPage extends StatelessWidget {
                                               }).toList(),
                                             ),
                                             const SizedBox(height: 16),
-
                                             Text('Approx Price: ₹${calculatedPrice.toStringAsFixed(0)}', style: TextStyle(fontSize: 16, color: Colors.green[800], fontWeight: FontWeight.bold)),
                                             const SizedBox(height: 24),
-
-                                            // Buttons
                                             Row(
                                               mainAxisAlignment: MainAxisAlignment.end,
                                               children: [
@@ -295,7 +282,20 @@ class ProductDetailsPage extends StatelessWidget {
                                                 ElevatedButton(
                                                   onPressed: () {
                                                     if (selectedDate == null || selectedTime == null || selectedHour.isEmpty) return;
-                                                    print("Date: $selectedDate, Time: $selectedTime, Duration: $selectedHour, Price: $calculatedPrice");
+
+                                                    final cartProduct = product.toProduct(
+                                                      selectedDate: selectedDate,
+                                                      selectedTime: selectedTime,
+                                                      selectedDuration: selectedHour,
+                                                      salePrice: calculatedPrice,
+                                                    );
+
+                                                    Provider.of<CartProvider>(context, listen: false).addToCart(cartProduct);
+
+                                                    Navigator.pop(context);
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      SnackBar(content: Text("${product.title} added to cart!")),
+                                                    );
                                                   },
                                                   child: const Text('Add to Cart'),
                                                 ),
@@ -310,7 +310,6 @@ class ProductDetailsPage extends StatelessWidget {
                               );
                             },
                           );
-
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.orange[700],
@@ -370,7 +369,6 @@ class ProductDetailsPage extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  // Description
                   const Text(
                     "Description",
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -403,7 +401,6 @@ class ProductDetailsPage extends StatelessWidget {
                     },
                   ),
                   const SizedBox(height: 20),
-                  // Key Features
                   const Text(
                     "Key Features",
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -432,7 +429,6 @@ class ProductDetailsPage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  // What’s Included
                   const Text(
                     "What’s Included",
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -461,7 +457,6 @@ class ProductDetailsPage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  // What’s Excluded
                   const Text(
                     "What’s Excluded",
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -490,7 +485,6 @@ class ProductDetailsPage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  // FAQs
                   const Text(
                     "FAQs",
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
