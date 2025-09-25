@@ -1,7 +1,7 @@
 import '../models/serviceCategoryDetail.dart';
 
 class Productdetail {
-  final Servicecategorydetail servicecategorydetail;
+  final MainCategory servicecategorydetail;
   final List<String> features;
   final List<String> whatIsIncluded;
   final List<String> whatIsExcluded;

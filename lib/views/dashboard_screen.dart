@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:user_app/widgets/product_card.dart';
 
 import '../controllers/home_conroller.dart';
 import '../widgets/service_category.dart';
 import '../widgets/offer_card.dart';
+import '../widgets/hover_effect.dart';
+import 'service_category_detail_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -16,14 +17,13 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProviderStateMixin {
-  bool _showSuggestion = true; // Flag to show suggestion on first load
+  bool _showSuggestion = true;
   AnimationController? _animationController;
   Animation<double>? _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
-    // Initialize animation controller for fade effect
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
@@ -32,12 +32,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       CurvedAnimation(parent: _animationController!, curve: Curves.easeInOut),
     );
 
-    // Start animation if suggestion should be shown
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final controller = Provider.of<HomeController>(context, listen: false);
       if (controller.selectedLocation == "Select Location" && _showSuggestion) {
         _animationController?.forward();
-        // Auto-dismiss after 5 seconds
         Future.delayed(const Duration(seconds: 5), () {
           if (mounted) {
             setState(() {
@@ -72,7 +70,6 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 🔹 Hero Banner with gradient overlay
                     ClipRRect(
                       borderRadius: BorderRadius.circular(16),
                       child: Stack(
@@ -140,7 +137,6 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       ),
                     ),
                     const SizedBox(height: 20),
-                    // 🔹 Services by Location
                     if (controller.selectedLocation != "Select Location") ...[
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -175,7 +171,6 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                             ],
                           ),
                           const SizedBox(height: 12),
-                          // 🔹 Service Grid
                           GridView.builder(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
@@ -216,7 +211,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                                 final s = currentServices[i];
                                 return ServiceCategoryCard(
                                   title: s.title,
-                                  imageUrl: s.imageUrl,
+                                  imageUrl: s.image,
+                                  slug: s.slug,
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => ServiceCategoryDetailScreen(
+                                          slug: s.slug,
+                                          location: controller.selectedLocation,
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 );
                               }
                             },
@@ -225,7 +232,6 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         ],
                       ),
                     ],
-                    // 🔹 Best Offers
                     Text(
                       "Best Offers",
                       style: Theme.of(context).textTheme.titleLarge,
@@ -270,7 +276,6 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         },
                       ),
                     ),
-                    // 🔹 Footer Section
                     const SizedBox(height: 30),
                     Container(
                       decoration: BoxDecoration(
@@ -338,7 +343,6 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 ),
               ),
             ),
-            // 🔹 Suggestion Overlay
             if (_showSuggestion && controller.selectedLocation == "Select Location")
               Positioned(
                 top: 0,
@@ -348,7 +352,6 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   opacity: _fadeAnimation!,
                   child: GestureDetector(
                     onTap: () {
-                      // Dismiss suggestion when tapped
                       setState(() {
                         _showSuggestion = false;
                       });
@@ -399,46 +402,6 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           ],
         );
       },
-    );
-  }
-}
-
-/// 🔹 Hover Effect Wrapper Widget
-class HoverEffect extends StatefulWidget {
-  final Widget child;
-  const HoverEffect({super.key, required this.child});
-
-  @override
-  State<HoverEffect> createState() => _HoverEffectState();
-}
-
-class _HoverEffectState extends State<HoverEffect> {
-  bool _hovering = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovering = true),
-      onExit: (_) => setState(() => _hovering = false),
-      child: AnimatedScale(
-        duration: const Duration(milliseconds: 200),
-        scale: _hovering ? 1.05 : 1.0,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          decoration: BoxDecoration(
-            boxShadow: _hovering
-                ? [
-              BoxShadow(
-                color: Colors.black26,
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              )
-            ]
-                : [],
-          ),
-          child: widget.child,
-        ),
-      ),
     );
   }
 }

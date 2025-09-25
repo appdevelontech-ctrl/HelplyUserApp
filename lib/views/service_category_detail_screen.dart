@@ -1,37 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:shimmer/shimmer.dart';
 import 'package:provider/provider.dart';
-import 'package:user_app/views/product_details_page.dart';
-
+import 'package:shimmer/shimmer.dart';
 import '../controllers/service_category_detail_controller.dart';
 
-import '../controllers/service_category_controller.dart';
-import '../models/serviceCategoryDetail.dart';
 import '../widgets/product_card.dart';
+import 'product_details_page.dart';
 
 class ServiceCategoryDetailScreen extends StatelessWidget {
-  final String title;
-  final String imageUrl;
+  final String slug;
+  final String location;
 
-  const ServiceCategoryDetailScreen({super.key, required this.title, required this.imageUrl});
+  const ServiceCategoryDetailScreen({
+    super.key,
+    required this.slug,
+    required this.location,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => ServiceCategoryController(title: title, imageUrl: imageUrl)),
-        ChangeNotifierProvider(create: (_) => ServiceCategoryDetailController()),
-      ],
-      child: Consumer2<ServiceCategoryController, ServiceCategoryDetailController>(
-        builder: (context, serviceCategoryController, serviceController, child) {
-          // Check loading state
-          if (serviceController.isLoading || serviceController.isLoading) {
+    return ChangeNotifierProvider(
+      create: (_) => ServiceCategoryDetailController()..fetchCategoryDetails(slug, location),
+      child: Consumer<ServiceCategoryDetailController>(
+        builder: (context, controller, child) {
+          if (controller.isLoading) {
             return Scaffold(
               appBar: AppBar(
-                title: Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 20),
+                title: const Text(
+                  'Loading...',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 20),
                 ),
                 backgroundColor: Colors.green[300],
                 elevation: 2,
@@ -40,29 +37,27 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
             );
           }
 
-          final service = serviceCategoryController.servicecategory;
-          final products = serviceController.servicecategorydetail.map((product) {
-            return Servicecategorydetail(
-              name: '${service.title} - ${product.name}',
-              description: product.description,
-              price: product.price,
-              duration: product.duration,
-              imageUrl: service.imageUrl ?? product.imageUrl,
-              regularPrice: double.tryParse(product.price.replaceAll('₹', '')) ?? 0.0,
-              salePrice: (double.tryParse(product.price.replaceAll('₹', '')) ?? 0.0) * 0.7,
-            );
-          }).toList();
-
-          if (products.isEmpty) {
-            return const Scaffold(
-              body: Center(child: Text('No services available')),
+          if (controller.errorMessage != null || controller.mainCategory == null) {
+            return Scaffold(
+              appBar: AppBar(
+                title: const Text(
+                  'Error',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 20),
+                ),
+                backgroundColor: Colors.green[300],
+                elevation: 2,
+              ),
+              body: Center(child: Text(controller.errorMessage ?? 'Failed to load data')),
             );
           }
+
+          final mainCategory = controller.mainCategory!;
+          final products = controller.products;
 
           return Scaffold(
             appBar: AppBar(
               title: Text(
-                service.title,
+                mainCategory.title,
                 style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 20),
               ),
               backgroundColor: Colors.green[300],
@@ -73,7 +68,7 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 🔹 Top Image Banner with Shadow
+                  // Top Image Banner with Shadow
                   ClipRRect(
                     borderRadius: BorderRadius.circular(16),
                     child: Container(
@@ -88,7 +83,7 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
                         ],
                       ),
                       child: CachedNetworkImage(
-                        imageUrl: service.imageUrl,
+                        imageUrl: mainCategory.image,
                         width: double.infinity,
                         height: 220,
                         fit: BoxFit.cover,
@@ -111,16 +106,21 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  // 🔹 Service Title & Rating
+                  // Category Title & Description
                   Text(
-                    service.title,
+                    mainCategory.title,
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: Colors.green[700],
                     ),
                   ),
                   const SizedBox(height: 6),
+                  Text(
+                    mainCategory.description,
+                    style: TextStyle(color: Colors.grey[700], fontSize: 14),
+                  ),
+                  const SizedBox(height: 12),
+                  // Rating (Static for now)
                   Row(
                     children: [
                       const Icon(Icons.star, color: Colors.orange, size: 20),
@@ -132,14 +132,16 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 12),
-
-                  // 🔹 Action Button
+                  // Action Button
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       onPressed: () {},
-                      icon: const Icon(Icons.info_outline),
-                      label: const Text('Cleaning Standards & Safety Guide',style: TextStyle(color: Colors.white),),
+                      icon: const Icon(Icons.info_outline, color: Colors.white),
+                      label: const Text(
+                        'Cleaning Standards & Safety Guide',
+                        style: TextStyle(color: Colors.white),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green[500],
                         padding: const EdgeInsets.symmetric(vertical: 12),
@@ -150,18 +152,16 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 24),
-
-                  // 🔹 All Services Grid Title
+                  // Products Grid Title
                   Text(
-                    'All ${service.title}',
+                    'All ${mainCategory.title} Services',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: Colors.green[800],
                     ),
                   ),
                   const SizedBox(height: 12),
-
-                  // 🔹 Responsive Grid
+                  // Responsive Grid
                   LayoutBuilder(builder: (context, constraints) {
                     int crossAxisCount = (constraints.maxWidth / 180).floor();
                     if (crossAxisCount < 1) crossAxisCount = 1;
@@ -178,71 +178,20 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
                         childAspectRatio: 0.65,
                       ),
                       itemBuilder: (context, index) {
-                        final serviceProduct = products[index];
-                        return GestureDetector(
+                        final product = products[index];
+                        return ProductCard(
+                          product: product,
                           onTap: () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => ProductDetailsPage(service: serviceProduct),
+                                builder: (context) => ProductDetailsPage(
+                                  slug: product.slug,
+                                  name: product.title,
+                                ),
                               ),
                             );
                           },
-                          child: Card(
-                            elevation: 3,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            clipBehavior: Clip.antiAlias,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Expanded(
-                                  child: CachedNetworkImage(
-                                    imageUrl: serviceProduct.imageUrl,
-                                    fit: BoxFit.cover,
-                                    placeholder: (context, url) => Shimmer.fromColors(
-                                      baseColor: Colors.grey[300]!,
-                                      highlightColor: Colors.grey[100]!,
-                                      child: Container(color: Colors.grey[300]),
-                                    ),
-                                    errorWidget: (context, url, error) => Image.asset(
-                                      'assets/images/fallback_image.webp',
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        serviceProduct.name,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        '₹${serviceProduct.salePrice.toStringAsFixed(0)}',
-                                        style: const TextStyle(
-                                          color: Colors.green,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        'Duration: ${serviceProduct.duration}',
-                                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
                         );
                       },
                     );
@@ -257,14 +206,12 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
     );
   }
 
-  // Shimmer effect for the grid
   Widget _buildShimmerGrid(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Shimmer for top image banner
           Shimmer.fromColors(
             baseColor: Colors.grey[300]!,
             highlightColor: Colors.grey[100]!,
@@ -278,7 +225,6 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          // Shimmer for title
           Shimmer.fromColors(
             baseColor: Colors.grey[300]!,
             highlightColor: Colors.grey[100]!,
@@ -289,7 +235,6 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          // Shimmer for rating
           Shimmer.fromColors(
             baseColor: Colors.grey[300]!,
             highlightColor: Colors.grey[100]!,
@@ -300,7 +245,6 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          // Shimmer for action button
           Shimmer.fromColors(
             baseColor: Colors.grey[300]!,
             highlightColor: Colors.grey[100]!,
@@ -314,7 +258,6 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-          // Shimmer for grid title
           Shimmer.fromColors(
             baseColor: Colors.grey[300]!,
             highlightColor: Colors.grey[100]!,
@@ -325,7 +268,6 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          // Shimmer for grid
           LayoutBuilder(builder: (context, constraints) {
             int crossAxisCount = (constraints.maxWidth / 180).floor();
             if (crossAxisCount < 1) crossAxisCount = 1;
@@ -334,7 +276,7 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
             return GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: 4, // Show 4 shimmer placeholders
+              itemCount: 4,
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: crossAxisCount,
                 crossAxisSpacing: 12,

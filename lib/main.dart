@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:user_app/controllers/cart_provider.dart';
+import 'package:user_app/controllers/location_controller.dart';
 import 'package:user_app/controllers/service_category_controller.dart';
 
 import 'controllers/home_conroller.dart';
@@ -20,6 +21,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => HomeController()),
         ChangeNotifierProvider(create: (_) => CartProvider()), // 👈 Global Provider
+        ChangeNotifierProvider(create: (_)=>LocationController())
       ],
       child: MaterialApp(
         title: "The Helply",

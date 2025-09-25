@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
-import '../models/serviceCategoryDetail.dart'; // Ensure correct import path
+
+import '../models/serviceCategoryDetail.dart';
 
 class ProductCard extends StatelessWidget {
-  final Servicecategorydetail service;
-  final VoidCallback? onTap; // ✅ Add onTap callback
+  final Product product;
+  final VoidCallback? onTap;
 
-
-  const ProductCard({super.key, required this.service,this.onTap});
+  const ProductCard({super.key, required this.product, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +19,7 @@ class ProductCard extends StatelessWidget {
         side: BorderSide(color: Colors.green[100]!, width: 1),
       ),
       child: InkWell(
-        onTap:  onTap,
+        onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         splashColor: Colors.green.withOpacity(0.3),
         child: LayoutBuilder(
@@ -31,7 +31,7 @@ class ProductCard extends StatelessWidget {
                 ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                   child: CachedNetworkImage(
-                    imageUrl: service.imageUrl ?? '',
+                    imageUrl: product.pImage,
                     height: cardConstraints.maxHeight * 0.5,
                     width: double.infinity,
                     fit: BoxFit.cover,
@@ -62,7 +62,7 @@ class ProductCard extends StatelessWidget {
                       children: [
                         // Name
                         Text(
-                          service.name ?? 'Unnamed Product',
+                          product.title,
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
@@ -72,26 +72,26 @@ class ProductCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 6),
-                        // Description with constrained height
+                        // Features (as description)
                         Flexible(
                           fit: FlexFit.tight,
                           child: Text(
-                            service.description ?? 'No description',
+                            product.features.isNotEmpty ? product.features.join(' ') : 'No features available',
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.grey[700],
                             ),
-                            maxLines: 2, // Reduced to 2 to accommodate price and duration
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(height: 6),
-                        // Price in its own Row
+                        // Price
                         Row(
                           children: [
                             Expanded(
                               child: Text(
-                                'Price: ${service.price ?? 'N/A'}',
+                                '₹${product.salePrice.toStringAsFixed(0)}',
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: Colors.green[800],
@@ -101,23 +101,15 @@ class ProductCard extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        // Duration in a separate Row
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                'Duration: ${service.duration ?? 'N/A'}',
+                            if (product.regularPrice > product.salePrice)
+                              Text(
+                                '₹${product.regularPrice.toStringAsFixed(0)}',
                                 style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[700],
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                  decoration: TextDecoration.lineThrough,
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
                           ],
                         ),
                       ],

@@ -1,33 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
-import '../views/service_category_detail_screen.dart';
 
 class ServiceCategoryCard extends StatelessWidget {
   final String title;
   final String imageUrl;
+  final String slug;
+  final VoidCallback? onTap;
 
   const ServiceCategoryCard({
     super.key,
     required this.title,
     required this.imageUrl,
+    required this.slug,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
       return InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ServiceCategoryDetailScreen(
-                title: title,
-                imageUrl: imageUrl,
-              ),
-            ),
-          );
-        },
+        onTap: onTap ?? () => debugPrint('Tapped on $title with slug: $slug'),
         child: Card(
           elevation: 4,
           shadowColor: Colors.black26,
@@ -91,7 +84,7 @@ class ServiceCategoryCard extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-              )
+              ),
             ],
           ),
         ),
