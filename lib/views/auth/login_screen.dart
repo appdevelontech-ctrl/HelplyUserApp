@@ -1,27 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../controllers/user_controller.dart';
 
-import '../controllers/user_controller.dart';
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => UserController(),
-      child: const _LoginScreenBody(),
-    );
-  }
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenBody extends StatefulWidget {
-  const _LoginScreenBody();
-
-  @override
-  State<_LoginScreenBody> createState() => __LoginScreenBodyState();
-}
-
-class __LoginScreenBodyState extends State<_LoginScreenBody> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   final _phoneController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   late AnimationController _animationController;
@@ -38,10 +27,6 @@ class __LoginScreenBodyState extends State<_LoginScreenBody> with SingleTickerPr
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
     _animationController.forward();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<UserController>(context, listen: false).checkLoginStatus(context);
-    });
   }
 
   @override
@@ -53,10 +38,15 @@ class __LoginScreenBodyState extends State<_LoginScreenBody> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final padding = size.width * 0.06;
+
     return Consumer<UserController>(
       builder: (context, controller, _) {
         return Scaffold(
           body: Container(
+            width: double.infinity,
+            height: double.infinity,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 colors: [Color(0xff004e92), Color(0xff000428)],
@@ -65,47 +55,23 @@ class __LoginScreenBodyState extends State<_LoginScreenBody> with SingleTickerPr
               ),
             ),
             child: SafeArea(
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.symmetric(
+                      horizontal: padding, vertical: size.height * 0.05),
                   child: FadeTransition(
                     opacity: _fadeAnimation,
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: Image.network(
-                            "https://backend-olxs.onrender.com/uploads/new/image-1755174201972.webp",
-                            height: 80,
-                            width: 200,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Icon(
-                              Icons.error,
-                              color: Colors.white,
-                              size: 50,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 40),
-                        Text(
+                        const Text(
                           "Welcome Back",
                           style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            letterSpacing: 1.2,
-                          ),
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white),
                         ),
-                        const SizedBox(height: 10),
-                        Text(
-                          "Login with your phone number",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.white.withOpacity(0.8),
-                          ),
-                        ),
-                        const SizedBox(height: 30),
+                        SizedBox(height: size.height * 0.02),
                         Form(
                           key: _formKey,
                           child: TextFormField(
@@ -113,22 +79,14 @@ class __LoginScreenBodyState extends State<_LoginScreenBody> with SingleTickerPr
                             keyboardType: TextInputType.phone,
                             style: const TextStyle(color: Colors.white),
                             decoration: InputDecoration(
-                              prefixIcon: Icon(Icons.phone, color: Colors.white.withOpacity(0.8)),
+                              prefixIcon: Icon(Icons.phone,
+                                  color: Colors.white.withOpacity(0.8)),
                               labelText: "Phone Number",
-                              labelStyle: TextStyle(color: Colors.white.withOpacity(0.8)),
                               filled: true,
                               fillColor: Colors.white.withOpacity(0.1),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide.none,
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Colors.orangeAccent, width: 2),
                               ),
                             ),
                             validator: (value) {
@@ -142,42 +100,42 @@ class __LoginScreenBodyState extends State<_LoginScreenBody> with SingleTickerPr
                             },
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        SizedBox(height: size.height * 0.03),
                         controller.isLoading
                             ? const CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.orangeAccent),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.orangeAccent),
                         )
                             : ElevatedButton(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.orangeAccent,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-                            elevation: 5,
+                                borderRadius: BorderRadius.circular(12)),
+                            padding: EdgeInsets.symmetric(
+                                horizontal: size.width * 0.1,
+                                vertical: size.height * 0.015),
                           ),
                           onPressed: () {
                             if (_formKey.currentState!.validate()) {
-                              controller.loginWithPhone(_phoneController.text, context);
+                              controller.loginWithPhone(
+                                  _phoneController.text.trim(), context);
                             }
                           },
                           child: const Text(
                             "Send OTP",
                             style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white),
                           ),
                         ),
                         if (controller.errorMessage != null) ...[
-                          const SizedBox(height: 10),
+                          SizedBox(height: size.height * 0.015),
                           Text(
                             controller.errorMessage!,
-                            style: const TextStyle(color: Colors.redAccent, fontSize: 14),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
+                            style: const TextStyle(color: Colors.redAccent),
+                          )
+                        ]
                       ],
                     ),
                   ),

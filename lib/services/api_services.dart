@@ -1,14 +1,15 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/location.dart';
+import '../models/order_model.dart';
 import '../models/serviceCategoryDetail.dart';
 import '../models/service_category.dart';
+import '../models/user.dart';
 
 class ApiServices {
   final String baseUrl = 'https://backend-olxs.onrender.com';
 
-  // Fetch unique locations
   Future<LocationResponse> fetchLocations() async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/get-all-zones-only'));
@@ -23,7 +24,6 @@ class ApiServices {
     }
   }
 
-  // Fetch categories by location
   Future<List<ServiceCategory>> fetchCategoriesByLocation(String location) async {
     try {
       final response = await http.get(
@@ -37,7 +37,7 @@ class ApiServices {
               .map((e) => ServiceCategory.fromJson(e))
               .toList();
         } else {
-          return []; // Return empty list if API returns success=false or no data
+          return [];
         }
       } else {
         throw Exception('Failed to load categories (Status code: ${response.statusCode})');
@@ -46,8 +46,6 @@ class ApiServices {
       throw Exception('Error fetching categories: $e');
     }
   }
-
-
 
   Future<CategoryDetailResponse> fetchCategoryDetails(String slug, String location) async {
     try {
@@ -64,7 +62,6 @@ class ApiServices {
       throw Exception('Error fetching category details: $e');
     }
   }
-
 
   Future<ProductDetail> fetchProductDetails(String slug) async {
     try {
@@ -87,4 +84,144 @@ class ApiServices {
     }
   }
 
+  Future<Map<String, dynamic>> loginWithOtp(String phone) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/login-with-otp/'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'phone': phone, 'password': ''}),
+      );
+
+      print('📩 login-with-otp request with $phone');
+      print('📩 Status: ${response.statusCode}');
+      print('📩 Body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final jsonData = jsonDecode(response.body);
+
+        if (jsonData['success'] == true) {
+          print('✅ loginWithOtp result: $jsonData');
+          print('💡 Plain OTP (newotp): ${jsonData['newotp']}');
+
+          return {
+            'success': true,
+            'hashotp': jsonData['otp'],
+            'plainOtp': jsonData['newotp'],
+            'message': jsonData['message'],
+            'token': jsonData['token'],
+            'user': jsonData['existingUser'],
+          };
+        } else {
+          throw Exception(jsonData['message'] ?? 'Failed to send OTP');
+        }
+      } else {
+        throw Exception('Failed to send OTP (Status code: ${response.statusCode})');
+      }
+    } catch (e) {
+      print('❌ loginWithPhone error: $e');
+      throw Exception('Error sending OTP: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> verifyOtp(String enteredOtp, String hashOtp) async {
+    try {
+      print('📲 verifyOtp() called with otp: $enteredOtp & hashOtp: $hashOtp');
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/login-verify-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'OTP': enteredOtp, 'HASHOTP': hashOtp}),
+      );
+
+      print('📩 verify-otp raw body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final jsonData = jsonDecode(response.body);
+
+        if (jsonData['success'] == true) {
+          return {
+            'success': true,
+            'user': jsonData['user'],
+          };
+        } else {
+          throw Exception(jsonData['message'] ?? 'Invalid OTP');
+        }
+      } else {
+        throw Exception('Failed to verify OTP (Status code: ${response.statusCode})');
+      }
+    } catch (e) {
+      print('❌ verifyOtp error: $e');
+      throw Exception('Error verifying OTP: $e');
+    }
+  }
+
+  Future<List<Order>> fetchUserOrders() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('userId');
+
+      print('📩 Fetching orders for userId: $userId');
+      if (userId == null) {
+        print('❌ Error: User ID not found in SharedPreferences');
+        throw Exception('User ID not found in SharedPreferences');
+      }
+
+      final url = Uri.parse('$baseUrl/user-orders/$userId');
+      print('📡 API Request URL: $url');
+
+      final response = await http.get(url);
+
+      print('📋 Response Status Code: ${response.statusCode}');
+      print('📄 Response Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print('✅ Parsed JSON Data: $data');
+
+        final userOrderResponse = UserOrderResponse.fromJson(data);
+        print('📦 Orders Fetched: ${userOrderResponse.userOrder.orders.length} orders');
+
+        return userOrderResponse.userOrder.orders.reversed.toList();
+      } else {
+        print('❌ Failed to fetch orders (Status code: ${response.statusCode})');
+        throw Exception('Failed to fetch orders (Status code: ${response.statusCode})');
+      }
+    } catch (e) {
+      print('❌ Error fetching orders: $e');
+      throw Exception('Error fetching orders: $e');
+    }
+  }
+
+  Future<Order> fetchOrderDetails(String userId, String orderId) async {
+    try {
+      print('📩 Fetching order details for userId: $userId, orderId: $orderId');
+
+      final url = Uri.parse('$baseUrl/user-orders-view/$userId/$orderId');
+      print('📡 API Request URL: $url');
+
+      final response = await http.get(url);
+
+      print('📋 Response Status Code: ${response.statusCode}');
+      print('📄 Response Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print('✅ Parsed JSON Data: $data');
+
+        if (data['success'] == true && data['userOrder'] != null) {
+          final userOrderResponse = UserOrderResponse.fromJson(data);
+          print('📦 Order Details Fetched: Order _id $orderId');
+          return userOrderResponse.userOrder.order!;
+        } else {
+          throw Exception('Failed to fetch order details: ${data['message'] ?? 'Unknown error'}');
+        }
+      } else {
+        print('❌ Failed to fetch order details (Status code: ${response.statusCode})');
+        throw Exception('Failed to fetch order details (Status code: ${response.statusCode})');
+      }
+    } catch (e) {
+      print('❌ Error fetching order details: $e');
+      throw Exception('Error fetching order details: $e');
+    }
+  }
 }

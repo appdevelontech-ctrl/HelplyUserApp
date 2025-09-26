@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:user_app/controllers/home_conroller.dart';
+import 'package:user_app/controllers/location_controller.dart';
+import 'package:user_app/controllers/cart_provider.dart';
+import 'package:user_app/views/auth/login_screen.dart';
 
-import 'controllers/home_conroller.dart';
-import 'controllers/location_controller.dart';
-import 'controllers/cart_provider.dart';
-import 'views/dashboard_screen.dart';
-import 'views/my_order_screen.dart';
-import 'views/cartpage.dart';
+import 'package:user_app/views/dashboard_screen.dart';
+import 'package:user_app/views/my_order_screen.dart';
+import 'package:user_app/views/cartpage.dart';
+
+import 'controllers/user_controller.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -41,7 +45,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
   void _initScreens() {
     _screens = [
       _ScreenLoader(animationController: _animationController!, child: const DashboardScreen()),
-      _ScreenLoader(animationController: _animationController!, child: const MyOrdersScreen()),
+      _ScreenLoader(animationController: _animationController!, child: const UserOrdersPage()),
       _ScreenLoader(animationController: _animationController!, child: const CartPage()),
     ];
   }
@@ -54,7 +58,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
   void _onTabTapped(int index) {
     if (_currentIndex == index) {
-      // Reload screen if current tab tapped again
       setState(() {
         _initScreens();
       });
@@ -83,7 +86,8 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
   Widget build(BuildContext context) {
     final homeController = Provider.of<HomeController>(context);
     final locationController = Provider.of<LocationController>(context);
-    final cartProvider = Provider.of<CartProvider>(context);
+
+    final userController = Provider.of<UserController>(context);
 
     return WillPopScope(
       onWillPop: () async {
@@ -92,7 +96,9 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
           _navigatorKeys[0].currentState?.popUntil((route) => route.isFirst);
           return false;
         }
-        return true;
+        // Exit confirmation dialog
+        final shouldExit = await _showModernExitDialog(context);
+        return shouldExit;
       },
       child: Scaffold(
         appBar: PreferredSize(
@@ -102,7 +108,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
             flexibleSpace: Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF56ab2f), Color(0xFFa8e063)],
+                  colors: [Color(0xff004e92), Color(0xff000428)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -115,22 +121,22 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                   child: Image.network(
                     "https://backend-olxs.onrender.com/uploads/new/image-1755174201972.webp",
                     height: 20,
-                    width: 90,
+                    width: 100,
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => const Icon(Icons.error, color: Colors.white),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
-                        dropdownColor: Colors.green.shade50,
+                        dropdownColor: Colors.blue.shade50,
                         value: homeController.selectedLocation,
                         isExpanded: true,
                         icon: const Icon(Icons.keyboard_arrow_down, color: Colors.white),
@@ -142,7 +148,11 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                             value: loc,
                             child: Text(
                               loc,
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black,
+                              ),
                             ),
                           );
                         }).toList(),
@@ -163,36 +173,89 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
         drawer: Drawer(
           child: Column(
             children: [
-              UserAccountsDrawerHeader(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF56ab2f), Color(0xFFa8e063)],
-                  ),
-                ),
-                accountName: const Text("Rahul Kumar", style: TextStyle(fontWeight: FontWeight.bold)),
-                accountEmail: const Text("rahul@example.com"),
-                currentAccountPicture: const CircleAvatar(
-                  backgroundImage: NetworkImage("https://i.pravatar.cc/150"),
-                ),
+              FutureBuilder(
+                future: SharedPreferences.getInstance(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const UserAccountsDrawerHeader(
+                      accountName: Text("User"),
+                      accountEmail: Text("No phone"),
+                      currentAccountPicture: CircleAvatar(
+                        backgroundImage: NetworkImage("https://i.pravatar.cc/150"),
+                      ),
+                    );
+                  }
+                  final prefs = snapshot.data!;
+                  final name = prefs.getString('name') ?? "User";
+                  final email = prefs.getString('email') ?? "";
+                  final phone = prefs.getString('phone') ?? "No phone";
+
+                  return UserAccountsDrawerHeader(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xff1e3c72), Color(0xff2a5298)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    accountName: Text(
+                      name,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    accountEmail: Text(
+                      email.isNotEmpty ? email : phone,
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+
+                    currentAccountPicture: const CircleAvatar(
+                      backgroundImage: NetworkImage("https://i.pravatar.cc/150"),
+                    ),
+                  );
+                },
               ),
               Expanded(
                 child: ListView(
                   children: const [
-                    ListTile(leading: Icon(Icons.home), title: Text("Home")),
-                    ListTile(leading: Icon(Icons.build), title: Text("Services")),
-                    ListTile(leading: Icon(Icons.info), title: Text("About Us")),
+                    ListTile(
+                      leading: Icon(Icons.home, color: Colors.blue),
+                      title: Text("Home",
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                    ),
+                    ListTile(
+                      leading: Icon(Icons.build, color: Colors.blue),
+                      title: Text("Services",
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                    ),
+                    ListTile(
+                      leading: Icon(Icons.info, color: Colors.blue),
+                      title: Text("About Us",
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                    ),
                   ],
                 ),
               ),
               const Divider(),
               ListTile(
                 leading: const Icon(Icons.logout, color: Colors.red),
-                title: const Text("Logout", style: TextStyle(color: Colors.red)),
-                onTap: () => Navigator.pop(context),
+                title: const Text("Logout",
+                    style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                onTap: () async {
+                  final confirm = await _showModernLogoutDialog(context);
+                  if (confirm) {
+                    final userController = Provider.of<UserController>(context, listen: false);
+                    await userController.logout();
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (context) => const LoginScreen()),
+                    );
+                  }
+                },
               ),
             ],
           ),
         ),
+
         body: Stack(
           children: [
             _buildOffstageNavigator(0),
@@ -202,48 +265,67 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
         ),
         bottomNavigationBar: Consumer<CartProvider>(
           builder: (context, cartProvider, child) {
-            return BottomNavigationBar(
-              backgroundColor: Colors.white,
-              selectedItemColor: Colors.green[700],
-              unselectedItemColor: Colors.grey,
-              currentIndex: _currentIndex,
-              type: BottomNavigationBarType.fixed,
-              onTap: _onTabTapped,
-              items: [
-                const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-                const BottomNavigationBarItem(icon: Icon(Icons.list_alt), label: 'My Orders'),
-                BottomNavigationBarItem(
-                  icon: Stack(
-                    children: [
-                      const Icon(Icons.shopping_cart),
-                      if (cartProvider.itemCount > 0)
-                        Positioned(
-                          right: 0,
-                          top: -2,
-                          child: CircleAvatar(
-                            radius: 8,
-                            backgroundColor: Colors.red,
-                            child: Text(
-                              cartProvider.itemCount.toString(),
-                              style: const TextStyle(fontSize: 10, color: Colors.white),
+            return Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xff004e92), Color(0xff000428)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+              child: BottomNavigationBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                selectedItemColor: Colors.white,
+                unselectedItemColor: Colors.white70,
+                currentIndex: _currentIndex,
+                type: BottomNavigationBarType.fixed,
+                onTap: _onTabTapped,
+                items: [
+                  const BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+                  const BottomNavigationBarItem(icon: Icon(Icons.list_alt), label: 'My Orders'),
+                  BottomNavigationBarItem(
+                    icon: Stack(
+                      children: [
+                        const Icon(Icons.shopping_cart),
+                        if (cartProvider.cartItems.isNotEmpty)
+                          Positioned(
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 16,
+                                minHeight: 16,
+                              ),
+                              child: Text(
+                                '${cartProvider.cartItems.length}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
                             ),
                           ),
-                        ),
-                    ],
-                  ),
-                  label: 'My Cart',
-                ),
-              ],
+                      ],
+                    ),
+                    label: 'Cart',
+                  )
+
+                ],
+              ),
             );
           },
         ),
-
       ),
     );
   }
 }
 
-/// Loader wrapper for any screen
 class _ScreenLoader extends StatelessWidget {
   final Widget child;
   final AnimationController animationController;
@@ -253,7 +335,7 @@ class _ScreenLoader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
-      future: Future.delayed(const Duration(milliseconds: 700)), // simulate loading
+      future: Future.delayed(const Duration(milliseconds: 700)),
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return ModernLoader(animationController: animationController);
@@ -263,8 +345,133 @@ class _ScreenLoader extends StatelessWidget {
     );
   }
 }
+Future<bool> _showModernExitDialog(BuildContext context) async {
+  return await showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: const LinearGradient(
+            colors: [Color(0xff004e92), Color(0xff000428)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.exit_to_app, size: 60, color: Colors.white),
+            const SizedBox(height: 16),
+            const Text(
+              "Exit App",
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              "Do you really want to exit the app?",
+              style: TextStyle(fontSize: 16, color: Colors.white70),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey[400],
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text("No", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orangeAccent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text("Yes", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  ) ??
+      false;
+}
 
-/// Modern Gradient Loader
+Future<bool> _showModernLogoutDialog(BuildContext context) async {
+  return await showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: const LinearGradient(
+            colors: [Color(0xff1e3c72), Color(0xff2a5298)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.logout, size: 60, color: Colors.white),
+            const SizedBox(height: 16),
+            const Text(
+              "Logout",
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              "Do you really want to logout?",
+              style: TextStyle(fontSize: 16, color: Colors.white70),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey[400],
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text("No", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orangeAccent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text("Yes", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  ) ??
+      false;
+}
+
+
 class ModernLoader extends StatelessWidget {
   final AnimationController animationController;
 

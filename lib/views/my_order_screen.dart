@@ -1,222 +1,261 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
+import '../controllers/order_controller.dart';
+import '../models/order_model.dart';
+import '../services/api_services.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:user_app/views/track_order_screen.dart';
 
-class MyOrdersScreen extends StatefulWidget {
-  const MyOrdersScreen({super.key});
+import 'order_detail_page.dart';
+
+class UserOrdersPage extends StatefulWidget {
+  const UserOrdersPage({super.key});
 
   @override
-  State<MyOrdersScreen> createState() => _MyOrdersPageState();
+  State<UserOrdersPage> createState() => _UserOrdersPageState();
 }
 
-class _MyOrdersPageState extends State<MyOrdersScreen> {
-  bool isLoading = true;
-  List<Map<String, dynamic>> orders = [];
-
+class _UserOrdersPageState extends State<UserOrdersPage> {
   @override
   void initState() {
     super.initState();
-    _loadOrders();
-  }
-
-  Future<void> _loadOrders() async {
-    await Future.delayed(const Duration(seconds: 2));
-    if (mounted) {
-      setState(() {
-        isLoading = false;
-        orders = [
-          {
-            "id": "ORD-1001",
-            "date": "25 Sep 2025",
-            "status": "Delivered",
-            "serviceName": "Deep House Cleaning",
-            "category": "Cleaning",
-            "price": 499,
-            "quantity": 1,
-            "address": "123, MG Road, Delhi",
-            "thumbnail":
-            "https://cdn-icons-png.flaticon.com/512/706/706164.png"
-          },
-          {
-            "id": "ORD-1002",
-            "date": "20 Sep 2025",
-            "status": "In Progress",
-            "serviceName": "AC Repair Service",
-            "category": "Maintenance",
-            "price": 799,
-            "quantity": 2,
-            "address": "Flat 4B, Green Park, Delhi",
-            "thumbnail":
-            "https://cdn-icons-png.flaticon.com/512/3534/3534066.png"
-          },
-          {
-            "id": "ORD-1003",
-            "date": "10 Sep 2025",
-            "status": "Cancelled",
-            "serviceName": "Pest Control",
-            "category": "Home Care",
-            "price": 249,
-            "quantity": 1,
-            "address": "House 7, Model Town",
-            "thumbnail":
-            "https://cdn-icons-png.flaticon.com/512/490/490091.png"
-          },
-        ];
-      });
-    }
-  }
-
-  Future<void> _refreshOrders() async {
-    setState(() => isLoading = true);
-    await _loadOrders();
+    debugPrint("🚀 UserOrdersPage initialized");
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
-
-      body: RefreshIndicator(
-        onRefresh: _refreshOrders,
-        child: isLoading
-            ? ListView.builder(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          itemCount: 3,
-          itemBuilder: (context, index) => _shimmerOrderCard(context),
-        )
-            : ListView.builder(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          itemCount: orders.length,
-          itemBuilder: (context, index) =>
-              _orderCard(context, orders[index]),
+    return ChangeNotifierProvider(
+      create: (_) => OrderController(apiService: ApiServices()),
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            "My Orders",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+              color: Colors.black87,
+            ),
+          ),
+          backgroundColor: Colors.white,
+          elevation: 0,
+          centerTitle: true,
+        ),
+        body: Builder(
+          builder: (BuildContext refreshContext) {
+            return RefreshIndicator(
+              onRefresh: () => Provider.of<OrderController>(refreshContext, listen: false).fetchOrders(),
+              color: Colors.orangeAccent,
+              child: Consumer<OrderController>(
+                builder: (context, controller, child) {
+                  if (controller.loading) {
+                    return _buildShimmerLoader();
+                  } else if (controller.orders.isEmpty) {
+                    return const Center(
+                      child: Text(
+                        "No orders found.",
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    );
+                  } else {
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: controller.orders.length,
+                      itemBuilder: (context, index) {
+                        final order = controller.orders[index];
+                        return _buildOrderCard(context, order, controller);
+                      },
+                    );
+                  }
+                },
+              ),
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _orderCard(BuildContext context, Map<String, dynamic> order) {
-    Color statusColor;
-    switch (order["status"]) {
-      case "Delivered":
-        statusColor = Colors.green;
-        break;
-      case "In Progress":
-        statusColor = Colors.orange;
-        break;
-      case "Cancelled":
-        statusColor = Colors.red;
-        break;
-      default:
-        statusColor = Colors.grey;
-    }
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
+  Widget _buildShimmerLoader() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey[300]!,
+      highlightColor: Colors.grey[100]!,
+      child: ListView.builder(
         padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        itemCount: 5,
+        itemBuilder: (context, index) => Card(
+          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          elevation: 4,
+          child: ListTile(
+            contentPadding: const EdgeInsets.all(16),
+            leading: const CircleAvatar(backgroundColor: Colors.grey),
+            title: Container(height: 20, color: Colors.grey),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 8),
+                Container(height: 14, width: 100, color: Colors.grey),
+                const SizedBox(height: 4),
+                Container(height: 14, width: 80, color: Colors.grey),
+                const SizedBox(height: 4),
+                Container(height: 14, width: 120, color: Colors.grey),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOrderCard(BuildContext context, Order order, OrderController controller) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: Colors.grey, width: 0.5),
+      ),
+      elevation: 4,
+      shadowColor: Colors.black12,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        leading: CircleAvatar(
+          backgroundColor: Colors.orangeAccent,
+          radius: 24,
+          child: Text(
+            order.orderId.toString(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+        ),
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // top row
-            Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    order["thumbnail"],
-                    width: 60,
-                    height: 60,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Text(order["serviceName"] ?? '',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w600)),
-                      Text(order["category"],
-                          style: const TextStyle(fontSize: 13, color: Colors.grey)),
-                      Text("Qty: ${order["quantity"]}",
-                          style: const TextStyle(fontSize: 13, color: Colors.grey)),
-                    ],
-                  ),
-                ),
-                Text("₹${order["price"]}",
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.bold)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            // order id & date
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(order["id"],
-                    style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w500)),
-                Text(order["date"],
-                    style: const TextStyle(fontSize: 13, color: Colors.grey)),
-              ],
-            ),
-            const SizedBox(height: 4),
-            // status
-            Text(order["status"],
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: statusColor)),
-            const SizedBox(height: 4),
-            // address
-            Text("Address: ${order["address"]}",
-                style: const TextStyle(fontSize: 13, color: Colors.black54)),
-            const SizedBox(height: 8),
-            // track button
-            Align(
-              alignment: Alignment.centerRight,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => TrackOrderScreen(order: order)),
-                  );
-                },
-                icon: const Icon(Icons.location_on, size: 18),
-                label: const Text("Track Order"),
+            Text(
+              "₹${order.totalAmount.toStringAsFixed(2)}",
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: Colors.black87,
               ),
             ),
+            _buildStatusChip(order.status),
           ],
         ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Payment: ${order.mode}",
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[700],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 4),
+              if (order.otp != null)
+                Text(
+                  "OTP: ${order.otp}",
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              const SizedBox(height: 4),
+              Text(
+                "Date: ${DateFormat('dd MMM yyyy, hh:mm a').format(order.createdAt)}",
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+        ),
+        trailing: Icon(
+          Icons.arrow_forward_ios,
+          size: 16,
+          color: Colors.grey[600],
+        ),
+        onTap: () {
+          debugPrint("Tapped on order ID: ${order.orderId}, _id: ${order.id}");
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => OrderDetailsPage(
+                orderId: order.id,
+                orderController: controller,
+              ),
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _shimmerOrderCard(BuildContext context) {
-    return Shimmer.fromColors(
-      baseColor: Colors.grey.shade300,
-      highlightColor: Colors.grey.shade100,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
+  Widget _buildStatusChip(int status) {
+    String statusText = _statusText(status);
+    Color chipColor;
+    switch (status) {
+      case 0:
+        chipColor = Colors.orange.shade100;
+        break;
+      case 1:
+        chipColor = Colors.blue.shade100;
+        break;
+      case 2:
+        chipColor = Colors.purple.shade100;
+        break;
+      case 5:
+        chipColor = Colors.red.shade100;
+        break;
+      case 7:
+        chipColor = Colors.green.shade100;
+        break;
+      default:
+        chipColor = Colors.grey.shade100;
+    }
+
+    return Chip(
+      label: Text(
+        statusText,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: chipColor.computeLuminance() > 0.5 ? Colors.black87 : Colors.white,
         ),
-        height: 140,
       ),
+      backgroundColor: chipColor,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
+  }
+
+  String _statusText(int status) {
+    switch (status) {
+      case 0:
+        return "Pending";
+      case 1:
+        return "Confirmed";
+      case 2:
+        return "Processing";
+      case 5:
+        return "Cancelled";
+      case 7:
+        return "Delivered";
+      default:
+        return "Unknown";
+    }
   }
 }

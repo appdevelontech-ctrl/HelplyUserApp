@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:user_app/controllers/cart_provider.dart';
 import 'package:user_app/controllers/location_controller.dart';
-import 'package:user_app/controllers/service_category_controller.dart';
-
-import 'controllers/home_conroller.dart';
-import 'main_screen.dart';
-
+import 'package:user_app/controllers/home_conroller.dart';
+import 'package:user_app/services/api_services.dart';
+import 'package:user_app/splash_screen.dart';
+import 'controllers/order_controller.dart';
+import 'controllers/user_controller.dart';
 
 void main() {
-  runApp(const MyApp());
-  print ('hello');
+   runApp(const MyApp());
+
 }
 
 class MyApp extends StatelessWidget {
@@ -21,14 +21,24 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => HomeController()),
-        ChangeNotifierProvider(create: (_) => CartProvider()), // 👈 Global Provider
-        ChangeNotifierProvider(create: (_)=>LocationController())
+        ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProvider(create: (_) => LocationController()),
+        ChangeNotifierProvider(create: (_) => UserController()),
+
       ],
       child: MaterialApp(
         title: "The Helply",
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(primarySwatch: Colors.blue),
-        home: const MainScreen(),
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+          scaffoldBackgroundColor: Colors.white,
+          appBarTheme: const AppBarTheme(
+            elevation: 0,
+            backgroundColor: Colors.transparent,
+          ),
+          visualDensity: VisualDensity.adaptivePlatformDensity,
+        ),
+        home: const SplashScreen(),
       ),
     );
   }

@@ -1,55 +1,50 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import '../models/serviceCategoryDetail.dart';
 
-class CartProvider with ChangeNotifier {
+class CartProvider extends ChangeNotifier {
   List<Product> _cartItems = [];
-  final String _cartKey = 'cart_items';
-
-  CartProvider() {
-    _loadCart();
-  }
-
   List<Product> get cartItems => _cartItems;
 
-  int get itemCount => _cartItems.length;
+  CartProvider() {
+    loadCartFromPrefs();
+  }
 
   double get totalPrice => _cartItems.fold(0, (sum, item) => sum + item.salePrice);
 
-  void addToCart(Product product) {
-    if (_cartItems.isEmpty || !_cartItems.any((item) => item.id == product.id)) {
-      _cartItems.add(product);
-      _saveCart();
-      notifyListeners();
-    }
-  }
-
-  void removeFromCart(Product product) {
-    _cartItems.removeWhere((item) => item.id == product.id);
-    _saveCart();
+  // Add a service to cart (only 1 at a time)
+  Future<void> addToCart(Product product) async {
+    _cartItems = [product];
     notifyListeners();
+    await saveCartToPrefs();
   }
 
-  void clearCart() {
+  Future<void> removeFromCart(Product product) async {
+    _cartItems.removeWhere((p) => p.id == product.id);
+    notifyListeners();
+    await saveCartToPrefs();
+  }
+
+  Future<void> clearCart() async {
     _cartItems.clear();
-    _saveCart();
     notifyListeners();
+    await saveCartToPrefs();
   }
 
-  Future<void> _loadCart() async {
+  Future<void> saveCartToPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    final String? cartData = prefs.getString(_cartKey);
-    if (cartData != null) {
-      final List<dynamic> decodedData = jsonDecode(cartData);
-      _cartItems = decodedData.map((item) => Product.fromJson(item)).toList();
+    final jsonString = jsonEncode(_cartItems.map((e) => e.toJson()).toList());
+    await prefs.setString('cart_items', jsonString);
+  }
+
+  Future<void> loadCartFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonString = prefs.getString('cart_items');
+    if (jsonString != null) {
+      final List<dynamic> jsonList = jsonDecode(jsonString);
+      _cartItems = jsonList.map((e) => Product.fromJson(e)).toList();
       notifyListeners();
     }
-  }
-
-  Future<void> _saveCart() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String encodedData = jsonEncode(_cartItems.map((item) => item.toJson()).toList());
-    await prefs.setString(_cartKey, encodedData);
   }
 }

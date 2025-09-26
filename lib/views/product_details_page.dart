@@ -8,6 +8,7 @@ import '../controllers/product_detail_controller.dart';
 import '../controllers/cart_provider.dart';
 import '../main_screen.dart';
 import '../models/serviceCategoryDetail.dart';
+import 'cartpage.dart';
 
 class ProductDetailsPage extends StatelessWidget {
   final String slug;
@@ -27,21 +28,7 @@ class ProductDetailsPage extends StatelessWidget {
         builder: (context, controller, child) {
           if (controller.isLoading) {
             return Scaffold(
-              appBar: AppBar(
-                leading: IconButton(
-                  icon: Image.asset(
-                    'assets/icons/back.png',
-                    width: 24,
-                    height: 24,
-                  ),
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                ),
-                title: Text(name),
-                backgroundColor: Colors.green[300],
-                elevation: 2,
-              ),
+            appBar: _buildAppBar("Loading.."),
               body: _buildShimmer(context),
             );
           }
@@ -50,7 +37,15 @@ class ProductDetailsPage extends StatelessWidget {
             return Scaffold(
               appBar: AppBar(
                 title: Text(name),
-                backgroundColor: Colors.green[300],
+                flexibleSpace: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xff004e92), Color(0xff000428)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                ),
                 elevation: 2,
               ),
               body: Center(child: Text(controller.errorMessage ?? 'Failed to load product details')),
@@ -60,28 +55,9 @@ class ProductDetailsPage extends StatelessWidget {
           final product = controller.productDetail!;
 
           return Scaffold(
-            appBar: AppBar(
-              leading: IconButton(
-                icon: Image.asset(
-                  'assets/icons/back.png',
-                  width: 24,
-                  height: 24,
-                ),
-                onPressed: () {
-                  Navigator.pop(context);
-                },
-              ),
-              title: Text(
-                product.title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  fontSize: 20,
-                ),
-              ),
-              backgroundColor: Colors.green[300],
-              elevation: 2,
-            ),
+          
+            appBar: _buildAppBar(product.title),
+            
             body: SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -125,10 +101,10 @@ class ProductDetailsPage extends StatelessWidget {
                         children: [
                           Text(
                             '₹${product.salePrice.toStringAsFixed(0)}',
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
-                              color: Colors.green[800],
+                              color: Color(0xff004e92),
                             ),
                           ),
                           if (product.regularPrice > product.salePrice)
@@ -290,15 +266,18 @@ class ProductDetailsPage extends StatelessWidget {
                                                       salePrice: calculatedPrice,
                                                     );
 
-                                                    Provider.of<CartProvider>(context, listen: false).addToCart(cartProduct);
-
-                                                    Navigator.pop(context);
-                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                      SnackBar(content: Text("${product.title} added to cart!")),
-                                                    );
+                                                    // Add to cart and go to CartPage
+                                                    Provider.of<CartProvider>(context, listen: false).addToCart(cartProduct).then((_) {
+                                                      Navigator.pop(context); // Close dialog
+                                                      Navigator.push(
+                                                        context,
+                                                        MaterialPageRoute(builder: (_) => const CartPage()),
+                                                      );
+                                                    });
                                                   },
                                                   child: const Text('Add to Cart'),
                                                 ),
+
                                               ],
                                             ),
                                           ],
@@ -312,14 +291,14 @@ class ProductDetailsPage extends StatelessWidget {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange[700],
+                          backgroundColor: const Color(0xff004e92),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                           elevation: 5,
-                          shadowColor: Colors.orange[300],
+                          shadowColor: Colors.blue[300],
                           textStyle: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -344,14 +323,14 @@ class ProductDetailsPage extends StatelessWidget {
                           );
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green[700],
+                          backgroundColor: const Color(0xff000428),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                           elevation: 5,
-                          shadowColor: Colors.green[300],
+                          shadowColor: Colors.blue[300],
                           textStyle: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -369,6 +348,7 @@ class ProductDetailsPage extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 20),
+
                   const Text(
                     "Description",
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -414,7 +394,7 @@ class ProductDetailsPage extends StatelessWidget {
                         children: [
                           const Icon(
                             Icons.check_circle,
-                            color: Colors.green,
+                            color: Colors.blue,
                             size: 18,
                           ),
                           const SizedBox(width: 8),
@@ -442,7 +422,7 @@ class ProductDetailsPage extends StatelessWidget {
                         children: [
                           const Icon(
                             Icons.check_circle,
-                            color: Colors.green,
+                            color: Colors.blue,
                             size: 18,
                           ),
                           const SizedBox(width: 8),
@@ -553,122 +533,34 @@ class ProductDetailsPage extends StatelessWidget {
               color: Colors.grey[300],
             ),
           ),
-          const SizedBox(height: 8),
-          Shimmer.fromColors(
-            baseColor: Colors.grey[300]!,
-            highlightColor: Colors.grey[100]!,
-            child: Container(
-              height: 14,
-              width: 100,
-              color: Colors.grey[300],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Shimmer.fromColors(
-            baseColor: Colors.grey[300]!,
-            highlightColor: Colors.grey[100]!,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                Container(
-                  height: 48,
-                  width: 150,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                Container(
-                  height: 48,
-                  width: 150,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Shimmer.fromColors(
-            baseColor: Colors.grey[300]!,
-            highlightColor: Colors.grey[100]!,
-            child: Container(
-              height: 20,
-              width: 150,
-              color: Colors.grey[300],
-            ),
-          ),
-          const SizedBox(height: 10),
-          ...List.generate(
-            3,
-                (_) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4.0),
-              child: Shimmer.fromColors(
-                baseColor: Colors.grey[300]!,
-                highlightColor: Colors.grey[100]!,
-                child: Container(
-                  height: 16,
-                  width: double.infinity,
-                  color: Colors.grey[300],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Shimmer.fromColors(
-            baseColor: Colors.grey[300]!,
-            highlightColor: Colors.grey[100]!,
-            child: Container(
-              height: 20,
-              width: 150,
-              color: Colors.grey[300],
-            ),
-          ),
-          const SizedBox(height: 10),
-          ...List.generate(
-            3,
-                (_) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4.0),
-              child: Shimmer.fromColors(
-                baseColor: Colors.grey[300]!,
-                highlightColor: Colors.grey[100]!,
-                child: Container(
-                  height: 16,
-                  width: double.infinity,
-                  color: Colors.grey[300],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Shimmer.fromColors(
-            baseColor: Colors.grey[300]!,
-            highlightColor: Colors.grey[100]!,
-            child: Container(
-              height: 20,
-              width: 150,
-              color: Colors.grey[300],
-            ),
-          ),
-          const SizedBox(height: 10),
-          ...List.generate(
-            3,
-                (_) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4.0),
-              child: Shimmer.fromColors(
-                baseColor: Colors.grey[300]!,
-                highlightColor: Colors.grey[100]!,
-                child: Container(
-                  height: 16,
-                  width: double.infinity,
-                  color: Colors.grey[300],
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );
   }
+}
+/// 🔹 AppBar (Blue)
+AppBar _buildAppBar(String title) {
+  return AppBar(
+    leading: Builder(
+      builder: (context) => IconButton(
+        icon: Image.asset(
+          'assets/icons/back.png',
+          width: 24,
+          height: 24,
+          color: Colors.white,
+        ),
+        onPressed: () => Navigator.pop(context),
+      ),
+    ),
+    title: Text(
+      title,
+      style: const TextStyle(
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+        fontSize: 20,
+      ),
+    ),
+    backgroundColor: Colors.blue[700],
+    elevation: 3,
+  );
 }

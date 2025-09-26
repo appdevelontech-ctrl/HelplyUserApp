@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../controllers/user_controller.dart';
+import '../../controllers/user_controller.dart';
+
 class OtpScreen extends StatefulWidget {
   final String phone;
-
   const OtpScreen({super.key, required this.phone});
 
   @override
   State<OtpScreen> createState() => _OtpScreenState();
 }
 
-class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMixin {
+class _OtpScreenState extends State<OtpScreen>
+    with SingleTickerProviderStateMixin {
   final _otpController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   late AnimationController _animationController;
@@ -38,10 +39,15 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final padding = size.width * 0.06;
+
     return Consumer<UserController>(
       builder: (context, controller, _) {
         return Scaffold(
           body: Container(
+            width: double.infinity,
+            height: double.infinity,
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 colors: [Color(0xff004e92), Color(0xff000428)],
@@ -50,47 +56,30 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
               ),
             ),
             child: SafeArea(
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.symmetric(horizontal: padding, vertical: size.height * 0.05),
                   child: FadeTransition(
                     opacity: _fadeAnimation,
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: Image.network(
-                            "https://backend-olxs.onrender.com/uploads/new/image-1755174201972.webp",
-                            height: 80,
-                            width: 200,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Icon(
-                              Icons.error,
-                              color: Colors.white,
-                              size: 50,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 40),
-                        Text(
+                        const Text(
                           "Verify OTP",
                           style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            letterSpacing: 1.2,
-                          ),
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white),
                         ),
-                        const SizedBox(height: 10),
+                        SizedBox(height: size.height * 0.01),
                         Text(
                           "Enter the OTP sent to ${widget.phone}",
                           style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.white.withOpacity(0.8),
-                          ),
+                              fontSize: 16,
+                              color: Colors.white.withOpacity(0.8)),
+                          textAlign: TextAlign.center,
                         ),
-                        const SizedBox(height: 30),
+                        SizedBox(height: size.height * 0.04),
                         Form(
                           key: _formKey,
                           child: TextFormField(
@@ -98,22 +87,16 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
                             keyboardType: TextInputType.number,
                             style: const TextStyle(color: Colors.white),
                             decoration: InputDecoration(
-                              prefixIcon: Icon(Icons.lock, color: Colors.white.withOpacity(0.8)),
+                              prefixIcon: Icon(Icons.lock,
+                                  color: Colors.white.withOpacity(0.8)),
                               labelText: "OTP",
-                              labelStyle: TextStyle(color: Colors.white.withOpacity(0.8)),
+                              labelStyle:
+                              TextStyle(color: Colors.white.withOpacity(0.8)),
                               filled: true,
                               fillColor: Colors.white.withOpacity(0.1),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide.none,
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Colors.orangeAccent, width: 2),
                               ),
                             ),
                             validator: (value) {
@@ -127,7 +110,7 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
                             },
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        SizedBox(height: size.height * 0.03),
                         controller.isLoading
                             ? const CircularProgressIndicator(
                           valueColor: AlwaysStoppedAnimation<Color>(Colors.orangeAccent),
@@ -136,34 +119,33 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.orangeAccent,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-                            elevation: 5,
+                                borderRadius: BorderRadius.circular(12)),
+                            padding: EdgeInsets.symmetric(
+                                horizontal: size.width * 0.1,
+                                vertical: size.height * 0.015),
                           ),
                           onPressed: () {
                             if (_formKey.currentState!.validate()) {
-                              controller.verifyOtp(_otpController.text, widget.phone, context);
+                              controller.verifyOtp(
+                                  _otpController.text.trim(), context);
                             }
                           },
                           child: const Text(
                             "Verify OTP",
                             style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white),
                           ),
                         ),
                         if (controller.errorMessage != null) ...[
-                          const SizedBox(height: 10),
+                          SizedBox(height: size.height * 0.015),
                           Text(
                             controller.errorMessage!,
-                            style: const TextStyle(color: Colors.redAccent, fontSize: 14),
-                            textAlign: TextAlign.center,
-                          ),
+                            style: const TextStyle(color: Colors.redAccent),
+                          )
                         ],
-                        const SizedBox(height: 20),
+                        SizedBox(height: size.height * 0.02),
                         TextButton(
                           onPressed: () {
                             controller.loginWithPhone(widget.phone, context);
@@ -171,11 +153,10 @@ class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMix
                           child: Text(
                             "Resend OTP",
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.8),
-                              fontSize: 14,
-                            ),
+                                color: Colors.white.withOpacity(0.8),
+                                fontSize: 14),
                           ),
-                        ),
+                        )
                       ],
                     ),
                   ),
