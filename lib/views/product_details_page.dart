@@ -14,11 +14,7 @@ class ProductDetailsPage extends StatelessWidget {
   final String slug;
   final String name;
 
-  const ProductDetailsPage({
-    super.key,
-    required this.slug,
-    required this.name,
-  });
+  const ProductDetailsPage({super.key, required this.slug, required this.name});
 
   @override
   Widget build(BuildContext context) {
@@ -28,12 +24,13 @@ class ProductDetailsPage extends StatelessWidget {
         builder: (context, controller, child) {
           if (controller.isLoading) {
             return Scaffold(
-            appBar: _buildAppBar("Loading.."),
+              appBar: _buildAppBar("Loading.."),
               body: _buildShimmer(context),
             );
           }
 
-          if (controller.errorMessage != null || controller.productDetail == null) {
+          if (controller.errorMessage != null ||
+              controller.productDetail == null) {
             return Scaffold(
               appBar: AppBar(
                 title: Text(name),
@@ -48,16 +45,22 @@ class ProductDetailsPage extends StatelessWidget {
                 ),
                 elevation: 2,
               ),
-              body: Center(child: Text(controller.errorMessage ?? 'Failed to load product details')),
+              body: Center(
+                child: Text(
+                  controller.errorMessage ?? 'Failed to load product details',
+                ),
+              ),
             );
           }
 
           final product = controller.productDetail!;
+          final cartProvider = Provider.of<CartProvider>(
+            context,
+            listen: false,
+          );
 
           return Scaffold(
-          
             appBar: _buildAppBar(product.title),
-            
             body: SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -131,74 +134,165 @@ class ProductDetailsPage extends StatelessWidget {
                     children: [
                       ElevatedButton(
                         onPressed: () {
+                          if (cartProvider.cartItems.isNotEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Already added a product. Please complete that order first.',
+                                ),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                            return;
+                          }
                           showDialog(
                             context: context,
                             builder: (BuildContext context) {
                               DateTime now = DateTime.now();
-                              List<DateTime> dateList = List.generate(11, (i) => now.add(Duration(days: i)));
+                              List<DateTime> dateList = List.generate(
+                                11,
+                                (i) => now.add(Duration(days: i)),
+                              );
                               DateTime? selectedDate = dateList[0];
                               DateTime? selectedTime;
-                              String selectedHour = '30min';
+                              String selectedDuration =
+                                  slug == 'multiday-service'
+                                  ? 'FullDay'
+                                  : '30min';
                               double calculatedPrice = product.salePrice;
 
-                              List<DateTime> generateTimesForDate(DateTime date) {
-                                bool isToday = date.year == now.year && date.month == now.month && date.day == now.day;
+                              List<DateTime> generateTimesForDate(
+                                DateTime date,
+                              ) {
+                                bool isToday =
+                                    date.year == now.year &&
+                                    date.month == now.month &&
+                                    date.day == now.day;
                                 DateTime start = isToday
-                                    ? now.add(Duration(minutes: 30 - (now.minute % 30)))
-                                    : DateTime(date.year, date.month, date.day, 8, 0);
-                                DateTime end = DateTime(date.year, date.month, date.day, 22, 0);
-                                if (start.isAfter(end)) start = DateTime(date.year, date.month, date.day, 8, 0);
+                                    ? now.add(
+                                        Duration(
+                                          minutes: 30 - (now.minute % 30),
+                                        ),
+                                      )
+                                    : DateTime(
+                                        date.year,
+                                        date.month,
+                                        date.day,
+                                        8,
+                                        0,
+                                      );
+                                DateTime end = DateTime(
+                                  date.year,
+                                  date.month,
+                                  date.day,
+                                  22,
+                                  0,
+                                );
+                                if (start.isAfter(end))
+                                  start = DateTime(
+                                    date.year,
+                                    date.month,
+                                    date.day,
+                                    8,
+                                    0,
+                                  );
 
                                 List<DateTime> times = [];
                                 DateTime current = start;
-                                while (current.isBefore(end) || current.isAtSameMomentAs(end)) {
+                                while (current.isBefore(end) ||
+                                    current.isAtSameMomentAs(end)) {
                                   times.add(current);
-                                  current = current.add(const Duration(minutes: 30));
+                                  current = current.add(
+                                    const Duration(minutes: 30),
+                                  );
                                 }
                                 return times;
                               }
 
                               int getMinutesFromHour(String hour) {
                                 if (hour == '30min') return 30;
-                                return int.parse(hour.substring(0, hour.length - 2)) * 60;
+                                return int.parse(
+                                      hour.substring(0, hour.length - 2),
+                                    ) *
+                                    60;
                               }
 
                               void updatePrice() {
-                                int minutes = getMinutesFromHour(selectedHour);
-                                if (minutes <= 30) {
-                                  calculatedPrice = product.salePrice;
+                                if (slug == 'multiday-service') {
+                                  if (selectedDuration == 'FullDay') {
+                                    calculatedPrice = product.salePrice;
+                                  } else {
+                                    int days = int.parse(
+                                      selectedDuration.replaceAll('days', ''),
+                                    );
+                                    calculatedPrice = product.salePrice * days;
+                                  }
                                 } else {
-                                  calculatedPrice = product.salePrice + (minutes - 30) * product.minPrice;
+                                  int minutes = getMinutesFromHour(
+                                    selectedDuration,
+                                  );
+                                  if (minutes <= 30) {
+                                    calculatedPrice = product.salePrice;
+                                  } else {
+                                    calculatedPrice =
+                                        product.salePrice +
+                                        (minutes - 30) * product.minPrice;
+                                  }
                                 }
                               }
 
                               return StatefulBuilder(
                                 builder: (context, setState) {
                                   return Dialog(
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    insetPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 24,
+                                    ),
                                     child: ConstrainedBox(
                                       constraints: BoxConstraints(
-                                        maxHeight: MediaQuery.of(context).size.height * 0.85,
-                                        maxWidth: MediaQuery.of(context).size.width * 0.95,
+                                        maxHeight:
+                                            MediaQuery.of(context).size.height *
+                                            0.85,
+                                        maxWidth:
+                                            MediaQuery.of(context).size.width *
+                                            0.95,
                                       ),
                                       child: SingleChildScrollView(
                                         padding: const EdgeInsets.all(16.0),
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
-                                            const Text('Choose Date & Time', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                                            const Text(
+                                              'Choose Date & Time',
+                                              style: TextStyle(
+                                                fontSize: 20,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
                                             const SizedBox(height: 16),
-                                            const Text('Select Date', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                                            const Text(
+                                              'Select Date',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
                                             const SizedBox(height: 8),
                                             Wrap(
                                               spacing: 8,
                                               runSpacing: 8,
                                               children: dateList.map((date) {
-                                                String dateStr = DateFormat('EEE, d MMM').format(date);
+                                                String dateStr = DateFormat(
+                                                  'EEE, d MMM',
+                                                ).format(date);
                                                 return ChoiceChip(
                                                   label: Text(dateStr),
-                                                  selected: selectedDate == date,
+                                                  selected:
+                                                      selectedDate == date,
                                                   onSelected: (bool selected) {
                                                     setState(() {
                                                       selectedDate = date;
@@ -209,75 +303,200 @@ class ProductDetailsPage extends StatelessWidget {
                                               }).toList(),
                                             ),
                                             const SizedBox(height: 16),
-                                            const Text('Select Start Time', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                                            const Text(
+                                              'Select Start Time',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
                                             const SizedBox(height: 8),
                                             if (selectedDate != null)
                                               Wrap(
                                                 spacing: 8,
                                                 runSpacing: 8,
-                                                children: generateTimesForDate(selectedDate!).map((time) {
-                                                  String timeStr = DateFormat('h:mm a').format(time);
-                                                  return ChoiceChip(
-                                                    label: Text(timeStr),
-                                                    selected: selectedTime == time,
-                                                    onSelected: (bool selected) {
-                                                      setState(() {
-                                                        selectedTime = time;
-                                                      });
-                                                    },
-                                                  );
-                                                }).toList(),
+                                                children:
+                                                    generateTimesForDate(
+                                                      selectedDate!,
+                                                    ).map((time) {
+                                                      String timeStr =
+                                                          DateFormat(
+                                                            'h:mm a',
+                                                          ).format(time);
+                                                      return ChoiceChip(
+                                                        label: Text(timeStr),
+                                                        selected:
+                                                            selectedTime ==
+                                                            time,
+                                                        onSelected:
+                                                            (bool selected) {
+                                                              setState(() {
+                                                                selectedTime =
+                                                                    time;
+                                                              });
+                                                            },
+                                                      );
+                                                    }).toList(),
                                               ),
                                             const SizedBox(height: 16),
-                                            const Text('Select Service Duration', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                                            const SizedBox(height: 8),
-                                            Wrap(
-                                              spacing: 8,
-                                              runSpacing: 8,
-                                              children: ['30min', '1Hr', '2Hr', '3Hr', '4Hr', '5Hr', '6Hr'].map((hour) {
-                                                return ChoiceChip(
-                                                  label: Text(hour),
-                                                  selected: selectedHour == hour,
-                                                  onSelected: (bool selected) {
-                                                    setState(() {
-                                                      selectedHour = hour;
-                                                      updatePrice();
-                                                    });
-                                                  },
-                                                );
-                                              }).toList(),
-                                            ),
+                                            if (slug == 'multiday-service')
+                                              Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  const Text(
+                                                    'Select Service Days',
+                                                    style: TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  Wrap(
+                                                    spacing: 8,
+                                                    runSpacing: 8,
+                                                    children:
+                                                        [
+                                                          'FullDay',
+                                                          '2days',
+                                                          '3days',
+                                                          '4days',
+                                                          '5days',
+                                                          '6days',
+                                                        ].map((day) {
+                                                          return ChoiceChip(
+                                                            label: Text(day),
+                                                            selected:
+                                                                selectedDuration ==
+                                                                day,
+                                                            onSelected:
+                                                                (
+                                                                  bool selected,
+                                                                ) {
+                                                                  setState(() {
+                                                                    selectedDuration =
+                                                                        day;
+                                                                    updatePrice();
+                                                                  });
+                                                                },
+                                                          );
+                                                        }).toList(),
+                                                  ),
+                                                ],
+                                              )
+                                            else
+                                              Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  const Text(
+                                                    'Select Service Hours',
+                                                    style: TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  Wrap(
+                                                    spacing: 8,
+                                                    runSpacing: 8,
+                                                    children:
+                                                        [
+                                                          '30min',
+                                                          '1Hr',
+                                                          '2Hr',
+                                                          '3Hr',
+                                                          '4Hr',
+                                                          '5Hr',
+                                                          '6Hr',
+                                                        ].map((hour) {
+                                                          return ChoiceChip(
+                                                            label: Text(hour),
+                                                            selected:
+                                                                selectedDuration ==
+                                                                hour,
+                                                            onSelected:
+                                                                (
+                                                                  bool selected,
+                                                                ) {
+                                                                  setState(() {
+                                                                    selectedDuration =
+                                                                        hour;
+                                                                    updatePrice();
+                                                                  });
+                                                                },
+                                                          );
+                                                        }).toList(),
+                                                  ),
+                                                ],
+                                              ),
                                             const SizedBox(height: 16),
-                                            Text('Approx Price: ₹${calculatedPrice.toStringAsFixed(0)}', style: TextStyle(fontSize: 16, color: Colors.green[800], fontWeight: FontWeight.bold)),
+                                            Text(
+                                              'Approx Price: ₹${calculatedPrice.toStringAsFixed(0)}',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                color: Colors.green[800],
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
                                             const SizedBox(height: 24),
                                             Row(
-                                              mainAxisAlignment: MainAxisAlignment.end,
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.end,
                                               children: [
-                                                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                                                TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(context),
+                                                  child: const Text('Cancel'),
+                                                ),
                                                 const SizedBox(width: 8),
                                                 ElevatedButton(
                                                   onPressed: () {
-                                                    if (selectedDate == null || selectedTime == null || selectedHour.isEmpty) return;
+                                                    if (selectedDate == null ||
+                                                        selectedTime == null ||
+                                                        selectedDuration
+                                                            .isEmpty)
+                                                      return;
 
-                                                    final cartProduct = product.toProduct(
-                                                      selectedDate: selectedDate,
-                                                      selectedTime: selectedTime,
-                                                      selectedDuration: selectedHour,
-                                                      salePrice: calculatedPrice,
-                                                    );
+                                                    final cartProduct = product
+                                                        .toProduct(
+                                                          selectedDate:
+                                                              selectedDate,
+                                                          selectedTime:
+                                                              selectedTime,
+                                                          selectedDuration:
+                                                              selectedDuration,
+                                                          salePrice:
+                                                              calculatedPrice,
+                                                        );
 
-                                                    // Add to cart and go to CartPage
-                                                    Provider.of<CartProvider>(context, listen: false).addToCart(cartProduct).then((_) {
-                                                      Navigator.pop(context); // Close dialog
-                                                      Navigator.push(
-                                                        context,
-                                                        MaterialPageRoute(builder: (_) => const CartPage()),
-                                                      );
-                                                    });
+                                                    cartProvider
+                                                        .addToCart(cartProduct)
+                                                        .then((_) {
+                                                          Navigator.pop(
+                                                            context,
+                                                          );
+                                                          ScaffoldMessenger.of(
+                                                            context,
+                                                          ).showSnackBar(
+                                                            const SnackBar(
+                                                              content: Text(
+                                                                'Product added to cart',
+                                                              ),
+                                                              duration:
+                                                                  Duration(
+                                                                    seconds: 2,
+                                                                  ),
+                                                            ),
+                                                          );
+                                                        });
                                                   },
-                                                  child: const Text('Add to Cart'),
+                                                  child: const Text(
+                                                    'Add to Cart',
+                                                  ),
                                                 ),
-
                                               ],
                                             ),
                                           ],
@@ -293,7 +512,10 @@ class ProductDetailsPage extends StatelessWidget {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xff004e92),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 14,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -325,7 +547,10 @@ class ProductDetailsPage extends StatelessWidget {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xff000428),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 14,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -348,7 +573,6 @@ class ProductDetailsPage extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 20),
-
                   const Text(
                     "Description",
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -387,7 +611,7 @@ class ProductDetailsPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   ...product.features.map(
-                        (f) => Padding(
+                    (f) => Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4.0),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -415,7 +639,7 @@ class ProductDetailsPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   ...product.whatIsIncluded.map(
-                        (f) => Padding(
+                    (f) => Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4.0),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -443,16 +667,12 @@ class ProductDetailsPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   ...product.whatIsExcluded.map(
-                        (f) => Padding(
+                    (f) => Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4.0),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(
-                            Icons.cancel,
-                            color: Colors.red,
-                            size: 18,
-                          ),
+                          const Icon(Icons.cancel, color: Colors.red, size: 18),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -470,31 +690,33 @@ class ProductDetailsPage extends StatelessWidget {
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 10),
-                  ...product.specifications.expand((spec) => spec.labels).map(
+                  ...product.specifications
+                      .expand((spec) => spec.labels)
+                      .map(
                         (faq) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            faq.label,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                faq.label,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                faq.value,
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            faq.value,
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
                   const SizedBox(height: 20),
                 ],
               ),
@@ -527,40 +749,36 @@ class ProductDetailsPage extends StatelessWidget {
           Shimmer.fromColors(
             baseColor: Colors.grey[300]!,
             highlightColor: Colors.grey[100]!,
-            child: Container(
-              height: 24,
-              width: 200,
-              color: Colors.grey[300],
-            ),
+            child: Container(height: 24, width: 200, color: Colors.grey[300]),
           ),
         ],
       ),
     );
   }
-}
-/// 🔹 AppBar (Blue)
-AppBar _buildAppBar(String title) {
-  return AppBar(
-    leading: Builder(
-      builder: (context) => IconButton(
-        icon: Image.asset(
-          'assets/icons/back.png',
-          width: 24,
-          height: 24,
-          color: Colors.white,
+
+  AppBar _buildAppBar(String title) {
+    return AppBar(
+      leading: Builder(
+        builder: (context) => IconButton(
+          icon: Image.asset(
+            'assets/icons/back.png',
+            width: 24,
+            height: 24,
+            color: Colors.white,
+          ),
+          onPressed: () => Navigator.pop(context),
         ),
-        onPressed: () => Navigator.pop(context),
       ),
-    ),
-    title: Text(
-      title,
-      style: const TextStyle(
-        fontWeight: FontWeight.bold,
-        color: Colors.white,
-        fontSize: 20,
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+          fontSize: 20,
+        ),
       ),
-    ),
-    backgroundColor: Colors.blue[700],
-    elevation: 3,
-  );
+      backgroundColor: Colors.blue[700],
+      elevation: 3,
+    );
+  }
 }

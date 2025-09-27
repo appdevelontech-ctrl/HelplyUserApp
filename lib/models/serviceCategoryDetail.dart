@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:intl/intl.dart';
 
 class CategoryDetailResponse {
   final bool success;
@@ -129,7 +130,6 @@ class Specifications {
     );
   }
 }
-
 class Product {
   final String id;
   final String title;
@@ -144,6 +144,10 @@ class Product {
   final DateTime? selectedDate;
   final DateTime? selectedTime;
   final String selectedDuration;
+  final double minPrice; // Added for API compatibility
+  final int weight; // Added for API compatibility
+  final int gst; // Added for API compatibility
+  final int stock; // Added for API compatibility
 
   Product({
     required this.id,
@@ -159,6 +163,10 @@ class Product {
     this.selectedDate,
     this.selectedTime,
     this.selectedDuration = '30min',
+    this.minPrice = 0.0,
+    this.weight = 0,
+    this.gst = 0,
+    this.stock = 0,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -171,12 +179,43 @@ class Product {
       features: List<String>.from(json['features'] ?? []),
       regularPrice: (json['regularPrice'] ?? 0).toDouble(),
       salePrice: (json['salePrice'] ?? 0).toDouble(),
-      userId: User.fromJson(json['userId'] ?? {}),
+      userId: User.fromJson(json['userId'] is String ? jsonDecode(json['userId']) : (json['userId'] ?? {})),
       variations: json['variations'] ?? [],
-      selectedDate: json['selectedDate'] != null ? DateTime.parse(json['selectedDate']) : null,
-      selectedTime: json['selectedTime'] != null ? DateTime.parse(json['selectedTime']) : null,
+      selectedDate: json['selectedDate'] != null ? DateTime.tryParse(json['selectedDate']) : null,
+      selectedTime: json['selectedTime'] != null ? DateTime.tryParse(json['selectedTime']) : null,
       selectedDuration: json['selectedDuration'] ?? '30min',
+      minPrice: (json['minPrice'] ?? 0).toDouble(),
+      weight: json['weight'] ?? 0,
+      gst: json['gst'] ?? 0,
+      stock: json['stock'] ?? 0,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'image': pImage, // API uses 'image' instead of 'pImage'
+      'regularPrice': regularPrice,
+      'salePrice': salePrice,
+      'price': salePrice, // API expects 'price' as salePrice
+      'color': '',
+      'customise': '',
+      'TotalQuantity': 1,
+      'SelectedSizes': {},
+      'weight': weight,
+      'gst': gst,
+      'stock': stock,
+      'pid': id, // API uses 'pid' as product ID
+      'date': selectedDate != null ? DateFormat('yyyy-MM-dd').format(selectedDate!) : '',
+      'time': selectedTime != null ? DateFormat('h:mm a').format(selectedTime!) : '',
+      'hour': selectedDuration, // API expects 'hour' as duration
+      'GSTPrice': salePrice, // Assuming GSTPrice is same as salePrice for simplicity
+      'NightCharges': 0,
+      'fullday': selectedDuration == 'FullDay' ? 1 : 0,
+      'minPrice': minPrice,
+      'quantity': 1,
+    };
   }
 
   Product copyWith({
@@ -193,6 +232,10 @@ class Product {
     DateTime? selectedDate,
     DateTime? selectedTime,
     String? selectedDuration,
+    double? minPrice,
+    int? weight,
+    int? gst,
+    int? stock,
   }) {
     return Product(
       id: id ?? this.id,
@@ -208,25 +251,11 @@ class Product {
       selectedDate: selectedDate ?? this.selectedDate,
       selectedTime: selectedTime ?? this.selectedTime,
       selectedDuration: selectedDuration ?? this.selectedDuration,
+      minPrice: minPrice ?? this.minPrice,
+      weight: weight ?? this.weight,
+      gst: gst ?? this.gst,
+      stock: stock ?? this.stock,
     );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      '_id': id,
-      'title': title,
-      'pImage': pImage,
-      'images': images,
-      'slug': slug,
-      'features': features,
-      'regularPrice': regularPrice,
-      'salePrice': salePrice,
-      'userId': userId,
-      'variations': variations,
-      'selectedDate': selectedDate?.toIso8601String(),
-      'selectedTime': selectedTime?.toIso8601String(),
-      'selectedDuration': selectedDuration,
-    };
   }
 }
 
@@ -327,7 +356,7 @@ class ProductDetail {
       category: List<String>.from(json['Category'] ?? []),
       hsn: json['hsn'] ?? '',
       sku: json['sku'] ?? '',
-      userId: User.fromJson(json['userId'] ?? {}),
+      userId: User.fromJson(json['userId'] is String ? jsonDecode(json['userId']) : (json['userId'] ?? {})),
       createdAt: json['createdAt'] ?? '',
       updatedAt: json['updatedAt'] ?? '',
       gst: json['gst'] ?? 0,
@@ -439,8 +468,8 @@ class ProductDetail {
       salePrice: salePrice ?? this.salePrice,
       userId: userId,
       variations: variations,
-      selectedDate: selectedDate ?? DateTime.now(),
-      selectedTime: selectedTime ?? DateTime.now(),
+      selectedDate: selectedDate,
+      selectedTime: selectedTime,
       selectedDuration: selectedDuration ?? '30min',
     );
   }
@@ -541,6 +570,18 @@ class User {
       createdAt: json['createdAt'] ?? '',
       address: json['address'] ?? '',
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      '_id': id,
+      'username': username,
+      'phone': phone,
+      'email': email,
+      'coverage': coverage,
+      'createdAt': createdAt,
+      'address': address,
+    };
   }
 
   User copyWith({

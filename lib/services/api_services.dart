@@ -224,4 +224,40 @@ class ApiServices {
       throw Exception('Error fetching order details: $e');
     }
   }
+
+  Future<Map<String, dynamic>> createOrder(String userId, Map<String, dynamic> orderData) async {
+    try {
+      final url = Uri.parse('$baseUrl/create-order/$userId');
+      print('📩 Creating order for userId: $userId');
+      print('📩 Payload: $orderData');
+
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(orderData),
+      );
+
+      print('📋 Response Status Code: ${response.statusCode}');
+      print('📄 Response Body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final jsonData = jsonDecode(response.body);
+        if (jsonData['success'] == true) {
+          return {
+            'success': true,
+            'message': jsonData['message'] ?? 'Order created successfully',
+            'order': jsonData['order'],
+          };
+        } else {
+          throw Exception(jsonData['message'] ?? 'Failed to create order');
+        }
+      } else {
+        throw Exception('Failed to create order (Status code: ${response.statusCode})');
+      }
+    } catch (e) {
+      print('❌ Error creating order: $e');
+      throw Exception('Error creating order: $e');
+    }
+  }
+
 }
