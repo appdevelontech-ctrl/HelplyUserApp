@@ -42,7 +42,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     return ChangeNotifierProvider.value(
       value: widget.orderController,
       child: Scaffold(
-        appBar:  _buildAppBar('Order Details'),
+        appBar: _buildAppBar('Order Details'),
         body: Consumer<OrderController>(
           builder: (context, controller, child) {
             if (controller.loading) {
@@ -97,6 +97,8 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                 children: [
                   _buildOrderHeader(context, order),
                   const SizedBox(height: 16),
+                  _buildUserDetails(context, order), // New section for user details
+                  const SizedBox(height: 16),
                   _buildOrderDetails(context, order),
                   const SizedBox(height: 16),
                   if (order.items.isNotEmpty) _buildItemsList(context, order),
@@ -141,6 +143,46 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
               ],
             ),
             _buildStatusChip(order.status),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUserDetails(BuildContext context, Order order) {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Customer Information",
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (order.details.isNotEmpty) ...[
+              _buildDetailRow("Name", order.details[0].username),
+              _buildDetailRow("Phone", order.details[0].phone),
+              _buildDetailRow("Email", order.details[0].email),
+              _buildDetailRow("Address", order.details[0].address),
+              _buildDetailRow("State", order.details[0].state),
+              _buildDetailRow("Pincode", order.details[0].pincode),
+            ] else ...[
+              const Text(
+                "No customer information available.",
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -257,12 +299,16 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
               fontWeight: FontWeight.w500,
             ),
           ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 14,
-              color: Colors.black87,
-              fontWeight: FontWeight.w500,
+          Flexible(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Colors.black87,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -324,32 +370,30 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         return "Unknown";
     }
   }
-}
 
-
-/// 🔹 AppBar (Blue)
-AppBar _buildAppBar(String title) {
-  return AppBar(
-    leading: Builder(
-      builder: (context) => IconButton(
-        icon: Image.asset(
-          'assets/icons/back.png',
-          width: 24,
-          height: 24,
-          color: Colors.white,
+  AppBar _buildAppBar(String title) {
+    return AppBar(
+      leading: Builder(
+        builder: (context) => IconButton(
+          icon: Image.asset(
+            'assets/icons/back.png',
+            width: 24,
+            height: 24,
+            color: Colors.white,
+          ),
+          onPressed: () => Navigator.pop(context),
         ),
-        onPressed: () => Navigator.pop(context),
       ),
-    ),
-    title: Text(
-      title,
-      style: const TextStyle(
-        fontWeight: FontWeight.bold,
-        color: Colors.white,
-        fontSize: 20,
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+          fontSize: 20,
+        ),
       ),
-    ),
-    backgroundColor: Colors.blue[700],
-    elevation: 3,
-  );
+      backgroundColor: Colors.blue[700],
+      elevation: 3,
+    );
+  }
 }

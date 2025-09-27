@@ -1,16 +1,12 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:google_maps_place_picker_mb/google_maps_place_picker.dart';
-
-import 'package:geolocator/geolocator.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:http/http.dart' as http;
-
-
-
+import 'package:fluttertoast/fluttertoast.dart';
+import 'package:google_place/google_place.dart';
+import 'package:user_app/main_screen.dart';
 import '../controllers/cart_provider.dart';
 import '../services/api_services.dart';
 import '../models/serviceCategoryDetail.dart';
@@ -31,14 +27,22 @@ class _CartPageState extends State<CartPage> {
   final _locationController = TextEditingController();
   final _addressController = TextEditingController();
   String? _selectedState;
-  String _selectedPaymentMethod = 'Credit Card';
+  String? _selectedPaymentMethod = 'Cash on Delivery';
+  final ApiServices _apiServices = ApiServices();
+  late GooglePlace _googlePlace;
+  List<AutocompletePrediction> _predictions = [];
   double? _latitude;
   double? _longitude;
-  final ApiServices _apiServices = ApiServices();
 
   final PageController _pageController = PageController();
   int _currentStep = 0;
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _googlePlace = GooglePlace('AIzaSyCcppZWLo75ylSQvsR-bTPZLEFEEec5nrY'); // Your Google API key
+  }
 
   @override
   void dispose() {
@@ -52,84 +56,33 @@ class _CartPageState extends State<CartPage> {
     super.dispose();
   }
 
-  Future<void> _pickLocation() async {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PlacePicker(
-          apiKey: 'AIzaSyCcppZWLo75ylSQvsR-bTPZLEFEEec5nrY',
-          onPlacePicked: (PickResult result) {
-            setState(() {
-              _locationController.text = result.formattedAddress ?? '';
-              _latitude = result.geometry?.location.lat;
-              _longitude = result.geometry?.location.lng;
-            });
-            Navigator.pop(context);
-          },
-          initialPosition: const LatLng(28.6139, 77.2090), // Delhi
-          useCurrentLocation: true,
-          selectInitialPosition: true,
-        ),
-      ),
-    );
+  void _autoCompleteSearch(String input) {
+    if (input.isEmpty) {
+      setState(() {
+        _predictions.clear();
+      });
+      return;
+    }
+
+    _googlePlace.autocomplete.get(input).then((result) {
+      if (result != null && result.predictions != null) {
+        setState(() {
+          _predictions = result.predictions!;
+        });
+      }
+    });
   }
 
-  Future<void> _fetchCurrentLocation() async {
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location services are disabled.')),
-        );
-        return;
-      }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Location permissions are denied.')),
-          );
-          return;
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location permissions are permanently denied.')),
-        );
-        return;
-      }
-
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
+  Future<void> _getPlaceDetails(String placeId) async {
+    var result = await _googlePlace.details.get(placeId);
+    if (result != null && result.result != null) {
       setState(() {
-        _latitude = position.latitude;
-        _longitude = position.longitude;
-        _locationController.text = 'Current Location';
+        _locationController.text = result.result!.formattedAddress!;
+        _latitude = result.result!.geometry!.location!.lat;
+        _longitude = result.result!.geometry!.location!.lng;
+        _predictions.clear();
+        print("_latitude is : $_latitude and Longitude is : $_longitude");
       });
-
-      final response = await http.get(
-        Uri.parse(
-          'https://maps.googleapis.com/maps/api/geocode/json?latlng=${position.latitude},${position.longitude}&key=YOUR_GOOGLE_MAPS_API_KEY',
-        ),
-      );
-
-      if (response.statusCode == 200) {
-        final jsonData = jsonDecode(response.body);
-        if (jsonData['status'] == 'OK') {
-          setState(() {
-            _locationController.text = jsonData['results'][0]['formatted_address'] ?? 'Current Location';
-          });
-        }
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to get current location: $e')),
-      );
     }
   }
 
@@ -141,18 +94,33 @@ class _CartPageState extends State<CartPage> {
         );
         return;
       }
-      _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      for (var item in cartProvider.cartItems) {
+        if (item.selectedDate == null || item.selectedTime == null || item.selectedDuration == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('All items must have a selected date, time, and duration.')),
+          );
+          return;
+        }
+      }
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
       setState(() => _currentStep++);
     } else if (_currentStep == 1) {
       if (_formKey.currentState!.validate()) {
         if (_latitude == null || _longitude == null) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please select a location.')),
+            const SnackBar(content: Text('Please select a valid location from the suggestions.')),
           );
           return;
         }
-        _pageController.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+        _pageController.nextPage(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
         setState(() => _currentStep++);
+
       }
     } else if (_currentStep == 2) {
       _confirmPayment();
@@ -161,90 +129,142 @@ class _CartPageState extends State<CartPage> {
 
   void _previousStep() {
     if (_currentStep > 0) {
-      _pageController.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+      _pageController.previousPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
       setState(() => _currentStep--);
     }
   }
+    Future<void> _confirmPayment() async {
+      setState(() => _isLoading = true);
+      final cartProvider = Provider.of<CartProvider>(context, listen: false);
 
-  Future<void> _confirmPayment() async {
-    setState(() => _isLoading = true);
-    final cartProvider = Provider.of<CartProvider>(context, listen: false);
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final userId = prefs.getString('userId');
+        if (userId == null) {
+          throw Exception('User ID not found. Please log in.');
+        }
 
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getString('userId');
-      if (userId == null) throw Exception('User ID not found. Please log in.');
+        String paymentMode;
+        switch (_selectedPaymentMethod) {
 
-      String paymentMode;
-      switch (_selectedPaymentMethod) {
-        case 'Credit Card':
-          paymentMode = 'CARD';
-          break;
-        case 'UPI':
-          paymentMode = 'UPI';
-          break;
-        case 'Cash on Delivery':
-          paymentMode = 'COD';
-          break;
-        default:
-          paymentMode = 'COD';
-      }
+          case 'UPI':
+            paymentMode = 'UPI';
+            break;
+          case 'Cash on Delivery':
+            paymentMode = 'COD';
+            break;
+          default:
+            paymentMode = 'COD';
+        }
 
-      final orderData = {
-        'phone': _phoneController.text,
-        'pincode': _pincodeController.text,
-        'address': _addressController.text,
-        'items': cartProvider.cartItems.map((item) => item.toJson()).toList(),
-        'status': '1',
-        'mode': paymentMode,
-        'details': {
-          'username': _nameController.text,
+        final orderData = {
           'phone': _phoneController.text,
           'pincode': _pincodeController.text,
-          'state': _selectedState,
           'address': _addressController.text,
+          'items': cartProvider.cartItems.map((item) => item.toJson()).toList(),
+          'status': '1',
+          'mode': paymentMode,
+          'details': {
+            'username': _nameController.text,
+            'phone': _phoneController.text,
+            'pincode': _pincodeController.text,
+            'state': _selectedState,
+            'address': _addressController.text,
+            'email': _emailController.text,
+          },
+          'discount': 0,
+          'shipping': 0,
+          'totalAmount': cartProvider.totalPrice ,
+          'primary': 'true',
+          'payment': 1,
+          'username': _nameController.text,
           'email': _emailController.text,
-          'latitude': _latitude,
-          'longitude': _longitude,
-        },
-        'discount': 0,
-        'shipping': 0,
-        'totalAmount': cartProvider.totalPrice,
-        'primary': 'true',
-        'payment': 1,
-        'username': _nameController.text,
-        'email': _emailController.text,
-        'location': _locationController.text.isNotEmpty ? _locationController.text : _selectedState,
-        'userId': userId,
-        'state': _selectedState,
-        'verified': 1,
-      };
+          'location': _locationController.text.isNotEmpty ? _locationController.text : _selectedState ?? '',
+          'lat': _latitude,
+          'lng': _longitude,
+          'userId': userId,
+          'state': _selectedState,
+          'verified': 1,
+        };
 
-      final result = await _apiServices.createOrder(userId, orderData);
+        print('Order Data: ${jsonEncode(orderData)}'); // Debug payload
 
-      cartProvider.clearCart();
-      setState(() => _isLoading = false);
+        final result = await _apiServices.createOrder(userId, orderData);
 
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Order Confirmed'),
-          content: Text(result['message'] ?? 'Your order has been placed successfully!'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.popUntil(context, (route) => route.isFirst),
-              child: const Text('Back to Home'),
+        cartProvider.clearCart();
+        setState(() => _isLoading = false);
+
+        // Enhanced dialog with orderId and styling
+        showDialog(
+          context: context,
+          barrierDismissible: false, // Prevent dismissing by tapping outside
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.green, size: 24),
+                const SizedBox(width: 8),
+                const Text(
+                  'Order Confirmed',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                    color: Colors.green,
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      );
-    } catch (e) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to create order: $e')),
-      );
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Your order has been placed successfully on ${DateFormat('EEEE, MMMM d, yyyy').format(DateTime.now())} at ${DateFormat('h:mm a').format(DateTime.now())} IST!',
+                  style: const TextStyle(fontSize: 16, color: Colors.black87),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Order Status: Created',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  result['message'] ?? 'Thank you for your purchase!',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (context)=>MainScreen())); // Back to home
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.blue,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text(
+                  'Back to Home',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+        );
+      } catch (e) {
+        setState(() => _isLoading = false);
+        showToast('Failed to create order: $e');
+      }
     }
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -252,23 +272,34 @@ class _CartPageState extends State<CartPage> {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
 
-    return Scaffold(
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(65),
-        child: AppBar(
-          elevation: 0,
-          flexibleSpace: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xff004e92), Color(0xff000428)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+    // Check if cart is empty
+    if (cartProvider.cartItems.isEmpty) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text(
+                "Your cart is empty",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                ),
               ),
-            ),
+              SizedBox(height: screenHeight * 0.02),
+              Text(
+                'Add items to your cart to proceed.',
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              ),
+            ],
           ),
-          title: const Text('Order Process', style: TextStyle(color: Colors.white)),
         ),
-      ),
+      );
+    }
+
+    // Original UI when cart is not empty
+    return Scaffold(
       body: Column(
         children: [
           Padding(
@@ -288,7 +319,9 @@ class _CartPageState extends State<CartPage> {
             child: PageView(
               controller: _pageController,
               physics: const NeverScrollableScrollPhysics(),
-              onPageChanged: (index) => setState(() => _currentStep = index),
+              onPageChanged: (index) {
+                setState(() => _currentStep = index);
+              },
               children: [
                 _buildCartStep(cartProvider, screenWidth, screenHeight),
                 _buildCheckoutStep(cartProvider, screenWidth, screenHeight),
@@ -318,7 +351,9 @@ class _CartPageState extends State<CartPage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.grey,
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       minimumSize: Size(screenWidth * 0.3, screenHeight * 0.06),
                     ),
                     child: const Text('Back'),
@@ -329,11 +364,17 @@ class _CartPageState extends State<CartPage> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                     minimumSize: Size(screenWidth * 0.3, screenHeight * 0.06),
                   ),
                   child: _isLoading
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white))
+                      ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(color: Colors.white),
+                  )
                       : Text(_currentStep == 2 ? 'Pay Now' : 'Next'),
                 ),
               ],
@@ -355,7 +396,10 @@ class _CartPageState extends State<CartPage> {
             color: _currentStep >= step ? Colors.blue : Colors.grey,
           ),
           child: Center(
-            child: Text('${step + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: Text(
+              '${step + 1}',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
           ),
         ),
         const SizedBox(height: 4),
@@ -376,7 +420,13 @@ class _CartPageState extends State<CartPage> {
   Widget _buildCartItem(Product item, double screenWidth, double screenHeight) {
     final dateFormat = DateFormat('EEE, d MMM');
     final timeFormat = DateFormat('h:mm a');
-    final duration = item.selectedDuration;
+    final duration = item.selectedDuration ?? 'Not specified';
+    final displayDate = item.selectedDate != null
+        ? dateFormat.format(item.selectedDate!)
+        : 'Date not selected';
+    final displayTime = item.selectedTime != null
+        ? timeFormat.format(item.selectedTime!)
+        : 'Time not selected';
 
     return Card(
       elevation: 4,
@@ -402,20 +452,42 @@ class _CartPageState extends State<CartPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item.title, style: TextStyle(fontSize: screenWidth * 0.045, fontWeight: FontWeight.bold, color: Colors.black87)),
+                  Text(
+                    item.title,
+                    style: TextStyle(
+                      fontSize: screenWidth * 0.045,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
                   SizedBox(height: screenWidth * 0.015),
-                  Text('• Date: ${dateFormat.format(item.selectedDate!)}', style: TextStyle(fontSize: screenWidth * 0.035, color: Colors.grey[600])),
-                  Text('• Time: ${timeFormat.format(item.selectedTime!)} / ${duration}', style: TextStyle(fontSize: screenWidth * 0.035, color: Colors.grey[600])),
+                  Text(
+                    '• Date: $displayDate',
+                    style: TextStyle(fontSize: screenWidth * 0.035, color: Colors.grey[600]),
+                  ),
+                  Text(
+                    '• Time: $displayTime / $duration',
+                    style: TextStyle(fontSize: screenWidth * 0.035, color: Colors.grey[600]),
+                  ),
                 ],
               ),
             ),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text('₹${item.salePrice.toStringAsFixed(0)}', style: TextStyle(fontSize: screenWidth * 0.045, fontWeight: FontWeight.bold, color: Colors.blue[700])),
+                Text(
+                  '₹${item.salePrice.toStringAsFixed(0)}',
+                  style: TextStyle(
+                    fontSize: screenWidth * 0.045,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue[700],
+                  ),
+                ),
                 IconButton(
                   icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: () => Provider.of<CartProvider>(context, listen: false).removeFromCart(item),
+                  onPressed: () {
+                    Provider.of<CartProvider>(context, listen: false).removeFromCart(item);
+                  },
                 ),
               ],
             ),
@@ -424,9 +496,6 @@ class _CartPageState extends State<CartPage> {
       ),
     );
   }
-
-
-
 
   Widget _buildCartStep(CartProvider cartProvider, double screenWidth, double screenHeight) {
     if (cartProvider.cartItems.isEmpty) {
@@ -439,15 +508,7 @@ class _CartPageState extends State<CartPage> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
             ),
             SizedBox(height: screenHeight * 0.02),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: const Text('Continue Shopping'),
-            ),
+            Text('No cart here'),
           ],
         ),
       );
@@ -547,7 +608,6 @@ class _CartPageState extends State<CartPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Address Section
             Card(
               elevation: 3,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -662,28 +722,31 @@ class _CartPageState extends State<CartPage> {
                       ],
                     ),
                     SizedBox(height: fieldSpacing),
-                    Row(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: _pickLocation,
-                            child: AbsorbPointer(
-                              child: _buildTextField(
-                                controller: _locationController,
-                                label: "Search your location...",
-                                height: fieldHeight,
-                                suffixIcon: const Icon(Icons.location_on, color: Colors.blue),
-                                validator: (val) => val!.isEmpty ? "Select a location" : null,
-                              ),
+                        _buildTextField(
+                          controller: _locationController,
+                          label: "Search your location...",
+                          height: fieldHeight,
+                          suffixIcon: const Icon(Icons.location_on, color: Colors.blue),
+                          onChanged: _autoCompleteSearch,
+                        ),
+                        if (_predictions.isNotEmpty)
+                          Container(
+                            height: 200,
+                            child: ListView.builder(
+                              itemCount: _predictions.length,
+                              itemBuilder: (context, index) {
+                                return ListTile(
+                                  title: Text(_predictions[index].description!),
+                                  onTap: () {
+                                    _getPlaceDetails(_predictions[index].placeId!);
+                                  },
+                                );
+                              },
                             ),
                           ),
-                        ),
-                        SizedBox(width: fieldSpacing),
-                        IconButton(
-                          icon: const Icon(Icons.my_location, color: Colors.blue),
-                          onPressed: _fetchCurrentLocation,
-                          tooltip: 'Use Current Location',
-                        ),
                       ],
                     ),
                     SizedBox(height: fieldSpacing),
@@ -698,7 +761,6 @@ class _CartPageState extends State<CartPage> {
               ),
             ),
             SizedBox(height: screenWidth * 0.05),
-            // Product Section
             Card(
               elevation: 3,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -714,7 +776,7 @@ class _CartPageState extends State<CartPage> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    SizedBox(height: fieldSpacing),
+                    SizedBox(height: screenWidth * 0.02),
                     ListView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
@@ -730,7 +792,7 @@ class _CartPageState extends State<CartPage> {
                       "Subtotal:",
                       "₹${cartProvider.totalPrice.toStringAsFixed(0)}",
                     ),
-                    SizedBox(height: fieldSpacing / 2),
+                    SizedBox(height: screenWidth * 0.02 / 2),
                     _buildPriceRow("Shipping:", "₹0"),
                     const Divider(),
                     _buildPriceRow(
@@ -882,6 +944,7 @@ class _CartPageState extends State<CartPage> {
     String? Function(String?)? validator,
     TextInputType? keyboardType,
     Widget? suffixIcon,
+    ValueChanged<String>? onChanged,
   }) {
     return SizedBox(
       height: height,
@@ -890,8 +953,20 @@ class _CartPageState extends State<CartPage> {
         validator: validator,
         maxLines: maxLines,
         keyboardType: keyboardType,
+        onChanged: onChanged,
         decoration: _inputDecoration(label).copyWith(suffixIcon: suffixIcon),
       ),
+    );
+  }
+
+  void showToast(String message) {
+    Fluttertoast.showToast(
+      msg: message,
+      toastLength: Toast.LENGTH_SHORT,
+      gravity: ToastGravity.BOTTOM,
+      backgroundColor: Colors.red,
+      textColor: Colors.white,
+      fontSize: 14.0,
     );
   }
 }

@@ -302,88 +302,162 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
             end: Alignment.bottomRight,
           ),
         ),
-        child: FutureBuilder(
-          future: Future.delayed(const Duration(milliseconds: 700)), // Loader delay
-          builder: (_, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              // Shimmer / Loader
-              return Column(
-                children: [
-                  Container(
+        child: Column(
+          children: [
+            // Drawer Header with User Info
+            FutureBuilder<SharedPreferences>(
+              future: SharedPreferences.getInstance(),
+              builder: (_, snapshot) {
+                if (!snapshot.hasData) {
+                  // Simplified loading state for header
+                  return Container(
                     height: 160,
-                    color: Colors.grey.shade300,
-                  ),
-                  Expanded(
-                    child: ListView.builder(
-                      padding: EdgeInsets.zero,
-                      itemCount: 7, // Drawer items count
-                      itemBuilder: (_, __) => ListTile(
-                        leading: Container(width: 24, height: 24, color: Colors.grey.shade400),
-                        title: Container(height: 16, color: Colors.grey.shade400, margin: const EdgeInsets.only(right: 80)),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xffa94ee7), Color(0xff2a5298)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
                     ),
-                  ),
-                ],
-              );
-            } else {
-              // Actual Drawer Content
-              return Column(
-                children: [
-                  FutureBuilder<SharedPreferences>(
-                    future: SharedPreferences.getInstance(),
-                    builder: (_, snapshot) {
-                      if (!snapshot.hasData) return const UserAccountsDrawerHeader(accountName: Text("User"), accountEmail: Text("No phone"));
-                      final prefs = snapshot.data!;
-                      final name = prefs.getString('name') ?? "User";
-                      final email = prefs.getString('email') ?? "";
-                      final phone = prefs.getString('phone') ?? "No phone";
-                      return UserAccountsDrawerHeader(
-                        accountName: Text(name, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18)),
-                        accountEmail: Text(email.isNotEmpty ? email : phone, style: const TextStyle(color: Colors.white70, fontSize: 14)),
-                        currentAccountPicture: CircleAvatar(backgroundImage: NetworkImage("https://i.pravatar.cc/150?img=${name.hashCode % 70}")),
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(colors: [Color(0xffa94ee7), Color(0xff2a5298)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                        ),
-                      );
-                    },
-                  ),
-                  Expanded(
-                    child: ListView(
-                      padding: EdgeInsets.zero,
-                      children: [
-                        DrawerTile(icon: Icons.home, title: "Home", onTap: () {}, iconColor: Colors.black, textColor: Colors.black),
-                        DrawerTile(icon: Icons.build, title: "Services", onTap: () {}, iconColor: Colors.black, textColor: Colors.black),
-                        DrawerTile(icon: Icons.person, title: "Profile Page", onTap: () {}, iconColor: Colors.black, textColor: Colors.black),
-                        DrawerTile(icon: Icons.privacy_tip, title: "Privacy Policy", onTap: () {}, iconColor: Colors.black, textColor: Colors.black),
-                        DrawerTile(icon: Icons.rule, title: "Terms and Conditions", onTap: () {}, iconColor: Colors.black, textColor: Colors.black),
-                        DrawerTile(icon: Icons.money_off, title: "Refund Policy", onTap: () {}, iconColor: Colors.black, textColor: Colors.black),
-                        DrawerTile(
-                          icon: Icons.delete_forever,
-                          title: "Delete Account",
-                          iconColor: Colors.redAccent,
-                          textColor: Colors.redAccent,
-                          onTap: () async {},
-                        ),
-                      ],
+                    child: const Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    ),
+                  );
+                }
+                final prefs = snapshot.data!;
+                final name = prefs.getString('name') ?? "User";
+                final email = prefs.getString('email') ?? "";
+                final phone = prefs.getString('phone') ?? "No phone";
+                return UserAccountsDrawerHeader(
+                  accountName: Text(
+                    name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      fontSize: 18,
                     ),
                   ),
-                  const Divider(color: Colors.white54, thickness: 1),
-                  ListTile(
-                    leading: const Icon(Icons.logout, color: Colors.redAccent),
-                    title: const Text("Logout", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                  accountEmail: Text(
+                    email.isNotEmpty ? email : phone,
+                    style: const TextStyle(color: Colors.white70, fontSize: 14),
+                  ),
+                  currentAccountPicture: CircleAvatar(
+                    backgroundImage: NetworkImage(
+                      "https://i.pravatar.cc/150?img=${name.hashCode % 70}",
+                    ),
+                  ),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xffa94ee7), Color(0xff2a5298)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                );
+              },
+            ),
+            // Drawer Items
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  DrawerTile(
+                    icon: Icons.home,
+                    title: "Home",
+                    onTap: () {
+                      setState(() => _currentIndex = 0);
+                      _navigatorKeys[0].currentState?.popUntil((route) => route.isFirst);
+                      Navigator.pop(context); // Close drawer
+                    },
+                    iconColor: Colors.black,
+                    textColor: Colors.black,
+                  ),
+                  DrawerTile(
+                    icon: Icons.build,
+                    title: "Services",
+                    onTap: () {
+                      Navigator.pop(context); // Close drawer
+                      // Add navigation logic for Services if needed
+                    },
+                    iconColor: Colors.black,
+                    textColor: Colors.black,
+                  ),
+                  DrawerTile(
+                    icon: Icons.person,
+                    title: "Profile Page",
+                    onTap: () {
+                      Navigator.pop(context); // Close drawer
+                      // Add navigation logic for Profile if needed
+                    },
+                    iconColor: Colors.black,
+                    textColor: Colors.black,
+                  ),
+                  DrawerTile(
+                    icon: Icons.privacy_tip,
+                    title: "Privacy Policy",
+                    onTap: () {
+                      Navigator.pop(context); // Close drawer
+                      // Add navigation logic for Privacy Policy if needed
+                    },
+                    iconColor: Colors.black,
+                    textColor: Colors.black,
+                  ),
+                  DrawerTile(
+                    icon: Icons.rule,
+                    title: "Terms and Conditions",
+                    onTap: () {
+                      Navigator.pop(context); // Close drawer
+                      // Add navigation logic for Terms and Conditions if needed
+                    },
+                    iconColor: Colors.black,
+                    textColor: Colors.black,
+                  ),
+                  DrawerTile(
+                    icon: Icons.money_off,
+                    title: "Refund Policy",
+                    onTap: () {
+                      Navigator.pop(context); // Close drawer
+                      // Add navigation logic for Refund Policy if needed
+                    },
+                    iconColor: Colors.black,
+                    textColor: Colors.black,
+                  ),
+                  DrawerTile(
+                    icon: Icons.delete_forever,
+                    title: "Delete Account",
+                    iconColor: Colors.redAccent,
+                    textColor: Colors.redAccent,
                     onTap: () async {
-                      if (await _showModernLogoutDialog(context)) {
-                        final userController = Provider.of<UserController>(context, listen: false);
-                        await userController.logout();
-                        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
-                      }
+                      Navigator.pop(context); // Close drawer
+                      // Add delete account logic if needed
                     },
                   ),
-                  const SizedBox(height: 12),
                 ],
-              );
-            }
-          },
+              ),
+            ),
+            const Divider(color: Colors.white54, thickness: 1),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.redAccent),
+              title: const Text(
+                "Logout",
+                style: TextStyle(
+                  color: Colors.redAccent,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              onTap: () async {
+                if (await _showModernLogoutDialog(context)) {
+                  final userController = Provider.of<UserController>(context, listen: false);
+                  await userController.logout();
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  );
+                }
+              },
+            ),
+            const SizedBox(height: 12),
+          ],
         ),
       ),
     );

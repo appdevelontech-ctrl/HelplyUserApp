@@ -71,6 +71,7 @@ class Order extends Equatable {
   final List<dynamic> category;
   final List<dynamic> cancelId;
   final String agentId;
+  final List<UserDetails> details; // Add details field
 
   const Order({
     required this.id,
@@ -94,6 +95,7 @@ class Order extends Equatable {
     this.category = const [],
     this.cancelId = const [],
     this.agentId = '',
+    this.details = const [], // Initialize details
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
@@ -122,6 +124,10 @@ class Order extends Equatable {
       category: json['category'] as List<dynamic>? ?? [],
       cancelId: json['CancelId'] as List<dynamic>? ?? [],
       agentId: json['agentId'] as String? ?? '',
+      details: (json['details'] as List<dynamic>?)
+          ?.map((detail) => UserDetails.fromJson(detail as Map<String, dynamic>))
+          .toList() ??
+          [],
     );
   }
 
@@ -148,7 +154,40 @@ class Order extends Equatable {
     category,
     cancelId,
     agentId,
+    details,
   ];
+}
+
+class UserDetails extends Equatable {
+  final String username;
+  final String phone;
+  final String pincode;
+  final String state;
+  final String address;
+  final String email;
+
+  const UserDetails({
+    required this.username,
+    required this.phone,
+    required this.pincode,
+    required this.state,
+    required this.address,
+    required this.email,
+  });
+
+  factory UserDetails.fromJson(Map<String, dynamic> json) {
+    return UserDetails(
+      username: json['username'] as String? ?? '',
+      phone: json['phone'] as String? ?? '',
+      pincode: json['pincode'] as String? ?? '',
+      state: json['state'] as String? ?? '',
+      address: json['address'] as String? ?? '',
+      email: json['email'] as String? ?? '',
+    );
+  }
+
+  @override
+  List<Object?> get props => [username, phone, pincode, state, address, email];
 }
 
 class Item extends Equatable {

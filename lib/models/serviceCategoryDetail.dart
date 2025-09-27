@@ -130,6 +130,7 @@ class Specifications {
     );
   }
 }
+
 class Product {
   final String id;
   final String title;
@@ -143,11 +144,11 @@ class Product {
   final List<dynamic> variations;
   final DateTime? selectedDate;
   final DateTime? selectedTime;
-  final String selectedDuration;
-  final double minPrice; // Added for API compatibility
-  final int weight; // Added for API compatibility
-  final int gst; // Added for API compatibility
-  final int stock; // Added for API compatibility
+  final String? selectedDuration; // Nullable to match dialog logic
+  final double minPrice;
+  final int weight;
+  final int gst;
+  final int stock;
 
   Product({
     required this.id,
@@ -162,7 +163,7 @@ class Product {
     required this.variations,
     this.selectedDate,
     this.selectedTime,
-    this.selectedDuration = '30min',
+    this.selectedDuration,
     this.minPrice = 0.0,
     this.weight = 0,
     this.gst = 0,
@@ -171,19 +172,19 @@ class Product {
 
   factory Product.fromJson(Map<String, dynamic> json) {
     return Product(
-      id: json['_id'] ?? '',
+      id: json['id'] ?? json['_id'] ?? '',
       title: json['title'] ?? '',
-      pImage: json['pImage'] ?? '',
+      pImage: json['pImage'] ?? json['image'] ?? '',
       images: List<String>.from(json['images'] ?? []),
       slug: json['slug'] ?? '',
       features: List<String>.from(json['features'] ?? []),
       regularPrice: (json['regularPrice'] ?? 0).toDouble(),
-      salePrice: (json['salePrice'] ?? 0).toDouble(),
+      salePrice: (json['salePrice'] ?? json['price'] ?? 0).toDouble(),
       userId: User.fromJson(json['userId'] is String ? jsonDecode(json['userId']) : (json['userId'] ?? {})),
       variations: json['variations'] ?? [],
-      selectedDate: json['selectedDate'] != null ? DateTime.tryParse(json['selectedDate']) : null,
-      selectedTime: json['selectedTime'] != null ? DateTime.tryParse(json['selectedTime']) : null,
-      selectedDuration: json['selectedDuration'] ?? '30min',
+      selectedDate: json['date'] != null && json['date'].isNotEmpty ? DateTime.tryParse(json['date']) : null,
+      selectedTime: json['time'] != null && json['time'].isNotEmpty ? _parseTime(json['time']) : null,
+      selectedDuration: json['hour'] ?? json['selectedDuration'] ?? null,
       minPrice: (json['minPrice'] ?? 0).toDouble(),
       weight: json['weight'] ?? 0,
       gst: json['gst'] ?? 0,
@@ -195,10 +196,10 @@ class Product {
     return {
       'id': id,
       'title': title,
-      'image': pImage, // API uses 'image' instead of 'pImage'
+      'image': pImage,
       'regularPrice': regularPrice,
       'salePrice': salePrice,
-      'price': salePrice, // API expects 'price' as salePrice
+      'price': salePrice,
       'color': '',
       'customise': '',
       'TotalQuantity': 1,
@@ -206,16 +207,27 @@ class Product {
       'weight': weight,
       'gst': gst,
       'stock': stock,
-      'pid': id, // API uses 'pid' as product ID
+      'pid': id,
       'date': selectedDate != null ? DateFormat('yyyy-MM-dd').format(selectedDate!) : '',
       'time': selectedTime != null ? DateFormat('h:mm a').format(selectedTime!) : '',
-      'hour': selectedDuration, // API expects 'hour' as duration
-      'GSTPrice': salePrice, // Assuming GSTPrice is same as salePrice for simplicity
+      'hour': selectedDuration ?? '30min',
+      'GSTPrice': salePrice,
       'NightCharges': 0,
       'fullday': selectedDuration == 'FullDay' ? 1 : 0,
       'minPrice': minPrice,
       'quantity': 1,
     };
+  }
+
+  static DateTime? _parseTime(String timeStr) {
+    try {
+      final format = DateFormat('h:mm a');
+      final now = DateTime.now();
+      final parsedTime = format.parse(timeStr);
+      return DateTime(now.year, now.month, now.day, parsedTime.hour, parsedTime.minute);
+    } catch (e) {
+      return null;
+    }
   }
 
   Product copyWith({
@@ -317,7 +329,7 @@ class ProductDetail {
     required this.sku,
     required this.userId,
     required this.createdAt,
-    required this.updatedAt,
+    final String? updatedAt,
     required this.gst,
     required this.stock,
     required this.testimonials,
@@ -330,7 +342,7 @@ class ProductDetail {
     required this.whatIsIncluded,
     required this.minPrice,
     required this.day,
-  });
+  }) : updatedAt = updatedAt ?? '';
 
   factory ProductDetail.fromJson(Map<String, dynamic> json) {
     return ProductDetail(
@@ -358,7 +370,7 @@ class ProductDetail {
       sku: json['sku'] ?? '',
       userId: User.fromJson(json['userId'] is String ? jsonDecode(json['userId']) : (json['userId'] ?? {})),
       createdAt: json['createdAt'] ?? '',
-      updatedAt: json['updatedAt'] ?? '',
+      updatedAt: json['updatedAt'],
       gst: json['gst'] ?? 0,
       stock: json['stock'] ?? 0,
       testimonials: json['testimonials'] ?? [],
@@ -374,6 +386,33 @@ class ProductDetail {
       whatIsIncluded: List<String>.from(json['what_is_included'] ?? []),
       minPrice: (json['minPrice'] ?? 0).toDouble(),
       day: json['day'] ?? 0,
+    );
+  }
+
+  Product toProduct({
+    DateTime? selectedDate,
+    DateTime? selectedTime,
+    String? selectedDuration,
+    double? salePrice,
+  }) {
+    return Product(
+      id: id,
+      title: title,
+      pImage: pImage,
+      images: images,
+      slug: slug,
+      features: features,
+      regularPrice: regularPrice,
+      salePrice: salePrice ?? this.salePrice,
+      userId: userId,
+      variations: variations,
+      selectedDate: selectedDate,
+      selectedTime: selectedTime,
+      selectedDuration: selectedDuration,
+      minPrice: minPrice,
+      weight: weight,
+      gst: gst,
+      stock: stock,
     );
   }
 
@@ -448,29 +487,6 @@ class ProductDetail {
       whatIsIncluded: whatIsIncluded ?? this.whatIsIncluded,
       minPrice: minPrice ?? this.minPrice,
       day: day ?? this.day,
-    );
-  }
-
-  Product toProduct({
-    DateTime? selectedDate,
-    DateTime? selectedTime,
-    String? selectedDuration,
-    double? salePrice,
-  }) {
-    return Product(
-      id: id,
-      title: title,
-      pImage: pImage,
-      images: images,
-      slug: slug,
-      features: features,
-      regularPrice: regularPrice,
-      salePrice: salePrice ?? this.salePrice,
-      userId: userId,
-      variations: variations,
-      selectedDate: selectedDate,
-      selectedTime: selectedTime,
-      selectedDuration: selectedDuration ?? '30min',
     );
   }
 }

@@ -5,7 +5,6 @@ import '../controllers/order_controller.dart';
 import '../models/order_model.dart';
 import '../services/api_services.dart';
 import 'package:shimmer/shimmer.dart';
-
 import 'order_detail_page.dart';
 
 class UserOrdersPage extends StatefulWidget {
@@ -61,11 +60,13 @@ class _UserOrdersPageState extends State<UserOrdersPage> {
                       ),
                     );
                   } else {
+                    // Sort orders by orderId in descending order
+                    final sortedOrders = List<Order>.from(controller.orders)..sort((a, b) => b.orderId.compareTo(a.orderId));
                     return ListView.builder(
                       padding: const EdgeInsets.all(12),
-                      itemCount: controller.orders.length,
+                      itemCount: sortedOrders.length,
                       itemBuilder: (context, index) {
-                        final order = controller.orders[index];
+                        final order = sortedOrders[index];
                         return _buildOrderCard(context, order, controller);
                       },
                     );
