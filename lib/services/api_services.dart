@@ -5,10 +5,10 @@ import '../models/location.dart';
 import '../models/order_model.dart';
 import '../models/serviceCategoryDetail.dart';
 import '../models/service_category.dart';
-import '../models/user.dart';
+
 
 class ApiServices {
-  final String baseUrl = 'https://backend-olxs.onrender.com';
+  static final   String baseUrl = 'https://backend-olxs.onrender.com';
 
   Future<LocationResponse> fetchLocations() async {
     try {
@@ -260,4 +260,59 @@ class ApiServices {
     }
   }
 
+
+  // 1️⃣ Create Payment Order
+  Future<Map<String, dynamic>> createPaymentOrder(Map<String, dynamic> payload) async {
+    final url = Uri.parse('$baseUrl/order-payment');
+    final response = await http.post(url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload));
+
+    print('Order Payment Response: ${response.body}');
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final jsonData = jsonDecode(response.body);
+      return jsonData;
+    } else {
+      return {
+        'success': false,
+        'message': 'Failed to create payment order (Status code: ${response.statusCode})'
+      };
+    }
+  }
+
+  // 2️⃣ Verify Payment
+  Future<Map<String, dynamic>> verifyPayment({
+    required String razorpayOrderId,
+    required String razorpayPaymentId,
+    required String razorpaySignature,
+  }) async {
+    final url = Uri.parse('$baseUrl/order-payment-verification');
+    final payload = {
+      'razorpay_order_id': razorpayOrderId,
+      'razorpay_payment_id': razorpayPaymentId,
+      'razorpay_signature': razorpaySignature,
+    };
+
+    final response = await http.post(url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload));
+
+    print("Verify Response Status: ${response.statusCode}");
+    print("Verify Response Body: ${response.body}");
+
+    if (response.statusCode == 200) {
+      final jsonData = jsonDecode(response.body);
+      if (jsonData['success'] == true) {
+        return {'success': true, 'message': jsonData['message'] ?? 'Payment verified successfully'};
+      } else {
+        return {'success': false, 'message': jsonData['message'] ?? 'Verification failed'};
+      }
+    } else {
+      return {
+        'success': false,
+        'message': 'Failed to verify payment (Status code: ${response.statusCode})'
+      };
+    }
+  }
 }

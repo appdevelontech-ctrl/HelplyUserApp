@@ -292,6 +292,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
       ),
     );
   }
+
   Drawer _buildDrawer(BuildContext context) {
     return Drawer(
       child: Container(

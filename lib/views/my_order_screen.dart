@@ -4,8 +4,10 @@ import 'package:intl/intl.dart';
 import '../controllers/order_controller.dart';
 import '../models/order_model.dart';
 import '../services/api_services.dart';
+import '../services/payment_service.dart';
 import 'package:shimmer/shimmer.dart';
 import 'order_detail_page.dart';
+
 
 class UserOrdersPage extends StatefulWidget {
   const UserOrdersPage({super.key});
@@ -18,13 +20,28 @@ class _UserOrdersPageState extends State<UserOrdersPage> {
   @override
   void initState() {
     super.initState();
-    debugPrint("🚀 UserOrdersPage initialized");
+    print('🚀 UserOrdersPage initialized');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        try {
+          context.read<OrderController>().fetchOrders();
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to load orders: $e'),
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => OrderController(apiService: ApiServices()),
+    return ScaffoldMessenger(
       child: Scaffold(
         appBar: AppBar(
           title: const Text(
@@ -39,42 +56,52 @@ class _UserOrdersPageState extends State<UserOrdersPage> {
           elevation: 0,
           centerTitle: true,
         ),
-        body: Builder(
-          builder: (BuildContext refreshContext) {
-            return RefreshIndicator(
-              onRefresh: () => Provider.of<OrderController>(refreshContext, listen: false).fetchOrders(),
-              color: Colors.orangeAccent,
-              child: Consumer<OrderController>(
-                builder: (context, controller, child) {
-                  if (controller.loading) {
-                    return _buildShimmerLoader();
-                  } else if (controller.orders.isEmpty) {
-                    return const Center(
-                      child: Text(
-                        "No orders found.",
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.grey,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    );
-                  } else {
-                    // Sort orders by orderId in descending order
-                    final sortedOrders = List<Order>.from(controller.orders)..sort((a, b) => b.orderId.compareTo(a.orderId));
-                    return ListView.builder(
-                      padding: const EdgeInsets.all(12),
-                      itemCount: sortedOrders.length,
-                      itemBuilder: (context, index) {
-                        final order = sortedOrders[index];
-                        return _buildOrderCard(context, order, controller);
-                      },
-                    );
-                  }
-                },
-              ),
-            );
+        body: RefreshIndicator(
+          onRefresh: () async {
+            try {
+              await context.read<OrderController>().fetchOrders();
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to refresh orders: $e'),
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+              }
+              return Future.error(e);
+            }
           },
+          color: Colors.orangeAccent,
+          child: Consumer<OrderController>(
+            builder: (context, controller, child) {
+              if (controller.loading) {
+                return _buildShimmerLoader();
+              } else if (controller.orders.isEmpty) {
+                return const Center(
+                  child: Text(
+                    "No orders found.",
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                );
+              } else {
+                final sortedOrders = List<Order>.from(controller.orders)
+                  ..sort((a, b) => b.orderId.compareTo(a.orderId));
+                return ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: sortedOrders.length,
+                  itemBuilder: (context, index) {
+                    final order = sortedOrders[index];
+                    return _buildOrderCard(context, order, controller);
+                  },
+                );
+              }
+            },
+          ),
         ),
       ),
     );
@@ -113,94 +140,139 @@ class _UserOrdersPageState extends State<UserOrdersPage> {
   }
 
   Widget _buildOrderCard(BuildContext context, Order order, OrderController controller) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: Colors.grey, width: 0.5),
-      ),
-      elevation: 4,
-      shadowColor: Colors.black12,
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        leading: CircleAvatar(
-          backgroundColor: Colors.orangeAccent,
-          radius: 24,
-          child: Text(
-            order.orderId.toString(),
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
+    final paymentService = PaymentService(context, ApiServices());
+
+    return GestureDetector(
+      onTap: () {
+        debugPrint("Tapped on order ID: ${order.orderId}, _id: ${order.id}");
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => OrderDetailsPage(
+              orderId: order.id,
+              orderController: controller,
             ),
           ),
+        );
+      },
+      child: Card(
+        margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Colors.grey, width: 0.5),
         ),
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              "₹${order.totalAmount.toStringAsFixed(2)}",
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-                color: Colors.black87,
-              ),
-            ),
-            _buildStatusChip(order.status),
-          ],
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 8),
+        elevation: 4,
+        shadowColor: Colors.black12,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                "Payment: ${order.mode}",
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[700],
-                  fontWeight: FontWeight.w500,
-                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    backgroundColor: Colors.orangeAccent,
+                    radius: 24,
+                    child: Text(
+                      order.orderId.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "₹${order.totalAmount.toStringAsFixed(2)}",
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            _buildStatusChip(order.status),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          "Payment: ${order.mode}",
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[700],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        if (order.otp != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            "OTP: ${order.otp}",
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[700],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 4),
+                        Text(
+                          "Date: ${DateFormat('dd MMM yyyy, hh:mm a').format(order.createdAt)}",
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: Colors.grey[600],
+                  ),
+                ],
               ),
-              const SizedBox(height: 4),
-              if (order.otp != null)
-                Text(
-                  "OTP: ${order.otp}",
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[700],
-                    fontWeight: FontWeight.w500,
+              const SizedBox(height: 12),
+
+              // ✅ Button logic
+              if (order.status == 7)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton(
+                    onPressed: (order.payment == 1)
+                        ? null // Disable button if already paid
+                        : () {
+                      print('🚀 Pay clicked for order ID: ${order.orderId}, _id: ${order.id}');
+                      paymentService.initiatePayment(order);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: (order.payment == 1) ? Colors.grey : Colors.green,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      (order.payment == 1) ? "Paid" : "Pay Now",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
-              const SizedBox(height: 4),
-              Text(
-                "Date: ${DateFormat('dd MMM yyyy, hh:mm a').format(order.createdAt)}",
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
+              // 🔹 Button will NOT appear if status != 7
             ],
           ),
         ),
-        trailing: Icon(
-          Icons.arrow_forward_ios,
-          size: 16,
-          color: Colors.grey[600],
-        ),
-        onTap: () {
-          debugPrint("Tapped on order ID: ${order.orderId}, _id: ${order.id}");
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => OrderDetailsPage(
-                orderId: order.id,
-                orderController: controller,
-              ),
-            ),
-          );
-        },
       ),
     );
   }

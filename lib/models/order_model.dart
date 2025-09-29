@@ -188,6 +188,8 @@ class UserDetails extends Equatable {
 
   @override
   List<Object?> get props => [username, phone, pincode, state, address, email];
+
+  void operator [](String other) {}
 }
 
 class Item extends Equatable {

@@ -1,27 +1,27 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../models/order_model.dart';
 import '../services/api_services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class OrderController with ChangeNotifier {
   final ApiServices apiService;
-
-  OrderController({required this.apiService}) {
-    fetchOrders();
-  }
-
   List<Order> _orders = [];
   Order? _orderDetails;
   bool _loading = false;
+  bool _isDisposed = false;
+
+  OrderController({required this.apiService});
 
   List<Order> get orders => _orders;
   Order? get orderDetails => _orderDetails;
   bool get loading => _loading;
 
   Future<void> fetchOrders() async {
+    if (_isDisposed) return;
+
     print('🚀 Starting fetchOrders in OrderController');
     _loading = true;
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
 
     try {
       print('📡 Calling apiService.fetchUserOrders()');
@@ -35,13 +35,15 @@ class OrderController with ChangeNotifier {
 
     _loading = false;
     print('🏁 fetchOrders completed, loading: $_loading');
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
   }
 
   Future<void> fetchOrderDetails(String orderId) async {
+    if (_isDisposed) return;
+
     print('🚀 Starting fetchOrderDetails for orderId: $orderId');
     _loading = true;
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -60,6 +62,13 @@ class OrderController with ChangeNotifier {
 
     _loading = false;
     print('🏁 fetchOrderDetails completed, loading: $_loading');
-    notifyListeners();
+    if (!_isDisposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+    print('🗑️ OrderController disposed');
   }
 }
