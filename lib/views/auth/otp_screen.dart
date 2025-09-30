@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../controllers/user_controller.dart';
 
 class OtpScreen extends StatefulWidget {
@@ -10,8 +11,7 @@ class OtpScreen extends StatefulWidget {
   State<OtpScreen> createState() => _OtpScreenState();
 }
 
-class _OtpScreenState extends State<OtpScreen>
-    with SingleTickerProviderStateMixin {
+class _OtpScreenState extends State<OtpScreen> with SingleTickerProviderStateMixin {
   final _otpController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   late AnimationController _animationController;
@@ -66,17 +66,12 @@ class _OtpScreenState extends State<OtpScreen>
                       children: [
                         const Text(
                           "Verify OTP",
-                          style: TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white),
+                          style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
                         SizedBox(height: size.height * 0.01),
                         Text(
                           "Enter the OTP sent to ${widget.phone}",
-                          style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.white.withOpacity(0.8)),
+                          style: TextStyle(fontSize: 16, color: Colors.white.withOpacity(0.8)),
                           textAlign: TextAlign.center,
                         ),
                         SizedBox(height: size.height * 0.04),
@@ -86,12 +81,11 @@ class _OtpScreenState extends State<OtpScreen>
                             controller: _otpController,
                             keyboardType: TextInputType.number,
                             style: const TextStyle(color: Colors.white),
+                            autofocus: true,
                             decoration: InputDecoration(
-                              prefixIcon: Icon(Icons.lock,
-                                  color: Colors.white.withOpacity(0.8)),
+                              prefixIcon: Icon(Icons.lock, color: Colors.white.withOpacity(0.8)),
                               labelText: "OTP",
-                              labelStyle:
-                              TextStyle(color: Colors.white.withOpacity(0.8)),
+                              labelStyle: TextStyle(color: Colors.white.withOpacity(0.8)),
                               filled: true,
                               fillColor: Colors.white.withOpacity(0.1),
                               border: OutlineInputBorder(
@@ -118,24 +112,25 @@ class _OtpScreenState extends State<OtpScreen>
                             : ElevatedButton(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.orangeAccent,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             padding: EdgeInsets.symmetric(
-                                horizontal: size.width * 0.1,
-                                vertical: size.height * 0.015),
+                              horizontal: size.width * 0.1,
+                              vertical: size.height * 0.015,
+                            ),
                           ),
                           onPressed: () {
                             if (_formKey.currentState!.validate()) {
-                              controller.verifyOtp(
-                                  _otpController.text.trim(), context);
+                              controller.errorMessage = null; // Clear previous errors
+                              controller.verifyOtp(_otpController.text.trim(), context);
                             }
                           },
                           child: const Text(
                             "Verify OTP",
                             style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white),
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                         if (controller.errorMessage != null) ...[
@@ -147,14 +142,30 @@ class _OtpScreenState extends State<OtpScreen>
                         ],
                         SizedBox(height: size.height * 0.02),
                         TextButton(
-                          onPressed: () {
-                            controller.loginWithPhone(widget.phone, context);
+                          onPressed: ()async {
+                            final prefs = await SharedPreferences.getInstance();
+                            final userid=prefs.getString('userId');
+                            controller.errorMessage = null; // Clear previous errors
+                            controller.loginWithPhone(widget.phone, context).then((_) {
+                             controller.fetchUserDetails("$userid");
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('OTP resent successfully'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }).catchError((e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to resend OTP: $e'),
+                                  backgroundColor: Colors.redAccent,
+                                ),
+                              );
+                            });
                           },
                           child: Text(
                             "Resend OTP",
-                            style: TextStyle(
-                                color: Colors.white.withOpacity(0.8),
-                                fontSize: 14),
+                            style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14),
                           ),
                         )
                       ],

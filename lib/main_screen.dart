@@ -5,10 +5,14 @@ import 'package:user_app/controllers/home_conroller.dart';
 import 'package:user_app/controllers/location_controller.dart';
 import 'package:user_app/controllers/cart_provider.dart';
 import 'package:user_app/controllers/user_controller.dart';
+import 'package:user_app/views/PrivacyPolicy_screen.dart';
 import 'package:user_app/views/auth/login_screen.dart';
+import 'package:user_app/views/cancellation_policy_screen.dart';
 import 'package:user_app/views/dashboard_screen.dart';
 import 'package:user_app/views/my_order_screen.dart';
 import 'package:user_app/views/cartpage.dart';
+import 'package:user_app/views/terms_condition_screen.dart';
+import 'package:user_app/views/profile_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -52,11 +56,10 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     _animationController.dispose();
     super.dispose();
   }
+
   void _onTabTapped(int index) {
     setState(() {
       _currentIndex = index;
-
-      // Reload screen for the tapped index
       switch (index) {
         case 0:
           _screens[0] = _ScreenLoader(
@@ -80,7 +83,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     });
   }
 
-
   Widget _buildOffstageNavigator(int index) {
     return Offstage(
       offstage: _currentIndex != index,
@@ -96,7 +98,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
-
     return WillPopScope(
       onWillPop: () async {
         if (_currentIndex != 0) {
@@ -108,11 +109,10 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
       },
       child: Scaffold(
         appBar: PreferredSize(
-
           preferredSize: const Size.fromHeight(65),
           child: AppBar(
             elevation: 0,
-            iconTheme: const IconThemeData(color: Colors.white), // ← ye add karo
+            iconTheme: const IconThemeData(color: Colors.white),
             flexibleSpace: Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
@@ -200,9 +200,21 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                 )
               ],
             ),
-            actions: const [
-              CircleAvatar(backgroundImage: NetworkImage("https://i.pravatar.cc/300")),
-              SizedBox(width: 12),
+            actions: [
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const ProfileScreen()),
+                  );
+                },
+                child: const Padding(
+                  padding: EdgeInsets.only(right: 12.0),
+                  child: CircleAvatar(
+                    backgroundImage: NetworkImage("https://i.pravatar.cc/300"),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -222,7 +234,9 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                 topLeft: Radius.circular(20),
                 topRight: Radius.circular(20),
               ),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -2))],
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -2))
+              ],
             ),
             child: ClipRRect(
               borderRadius: const BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20)),
@@ -305,33 +319,15 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
         ),
         child: Column(
           children: [
-            // Drawer Header with User Info
-            FutureBuilder<SharedPreferences>(
-              future: SharedPreferences.getInstance(),
-              builder: (_, snapshot) {
-                if (!snapshot.hasData) {
-                  // Simplified loading state for header
-                  return Container(
-                    height: 160,
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xffa94ee7), Color(0xff2a5298)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                    child: const Center(
-                      child: CircularProgressIndicator(color: Colors.white),
-                    ),
-                  );
-                }
-                final prefs = snapshot.data!;
-                final name = prefs.getString('name') ?? "User";
-                final email = prefs.getString('email') ?? "";
-                final phone = prefs.getString('phone') ?? "No phone";
+            Consumer<UserController>(
+              builder: (context, userController, _) {
+                final user = userController.user;
+                final username = user?.username ?? 'User';
+                final email = user?.email ?? '';
+                final phone = user?.phone ?? 'No phone';
                 return UserAccountsDrawerHeader(
                   accountName: Text(
-                    name,
+                    username,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
@@ -344,7 +340,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                   ),
                   currentAccountPicture: CircleAvatar(
                     backgroundImage: NetworkImage(
-                      "https://i.pravatar.cc/150?img=${name.hashCode % 70}",
+                      "https://i.pravatar.cc/150?img=${username.hashCode % 70}",
                     ),
                   ),
                   decoration: const BoxDecoration(
@@ -357,7 +353,6 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                 );
               },
             ),
-            // Drawer Items
             Expanded(
               child: ListView(
                 padding: EdgeInsets.zero,
@@ -368,17 +363,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                     onTap: () {
                       setState(() => _currentIndex = 0);
                       _navigatorKeys[0].currentState?.popUntil((route) => route.isFirst);
-                      Navigator.pop(context); // Close drawer
-                    },
-                    iconColor: Colors.black,
-                    textColor: Colors.black,
-                  ),
-                  DrawerTile(
-                    icon: Icons.build,
-                    title: "Services",
-                    onTap: () {
-                      Navigator.pop(context); // Close drawer
-                      // Add navigation logic for Services if needed
+                      Navigator.pop(context);
                     },
                     iconColor: Colors.black,
                     textColor: Colors.black,
@@ -387,8 +372,11 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                     icon: Icons.person,
                     title: "Profile Page",
                     onTap: () {
-                      Navigator.pop(context); // Close drawer
-                      // Add navigation logic for Profile if needed
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const ProfileScreen()),
+                      );
                     },
                     iconColor: Colors.black,
                     textColor: Colors.black,
@@ -397,8 +385,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                     icon: Icons.privacy_tip,
                     title: "Privacy Policy",
                     onTap: () {
-                      Navigator.pop(context); // Close drawer
-                      // Add navigation logic for Privacy Policy if needed
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => PrivacyPolicyScreen()));
                     },
                     iconColor: Colors.black,
                     textColor: Colors.black,
@@ -407,18 +394,16 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                     icon: Icons.rule,
                     title: "Terms and Conditions",
                     onTap: () {
-                      Navigator.pop(context); // Close drawer
-                      // Add navigation logic for Terms and Conditions if needed
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => TermsConditionsScreen()));
                     },
                     iconColor: Colors.black,
                     textColor: Colors.black,
                   ),
                   DrawerTile(
                     icon: Icons.money_off,
-                    title: "Refund Policy",
+                    title: "Cancellation Policy",
                     onTap: () {
-                      Navigator.pop(context); // Close drawer
-                      // Add navigation logic for Refund Policy if needed
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => CancellationPolicyScreen()));
                     },
                     iconColor: Colors.black,
                     textColor: Colors.black,
@@ -430,7 +415,31 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                     textColor: Colors.redAccent,
                     onTap: () async {
                       Navigator.pop(context); // Close drawer
-                      // Add delete account logic if needed
+                      final confirmed = await _showModernDeleteAccountDialog(context);
+                      if (confirmed) {
+                        final userController = Provider.of<UserController>(context, listen: false);
+                        try {
+                          await userController.deleteAccount(context);
+                          await userController.logout();
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(builder: (_) => const LoginScreen()),
+                          );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Account deleted successfully'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error deleting account: $e'),
+                              backgroundColor: Colors.redAccent,
+                            ),
+                          );
+                        }
+                      }
                     },
                   ),
                 ],
@@ -464,9 +473,155 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
     );
   }
 
+  Future<bool> _showModernExitDialog(BuildContext context) async {
+    return await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: const LinearGradient(
+                colors: [Color(0xff004e92), Color(0xff000428)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+          ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.exit_to_app, size: 60, color: Colors.white),
+              const SizedBox(height: 16),
+              const Text("Exit App", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+              const SizedBox(height: 10),
+              const Text("Do you really want to exit the app?",
+                  style: TextStyle(fontSize: 16, color: Colors.white70), textAlign: TextAlign.center),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey[400], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text("No", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orangeAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text("Yes", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    ) ??
+        false;
+  }
+
+  Future<bool> _showModernLogoutDialog(BuildContext context) async {
+    return await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: const LinearGradient(
+                colors: [Color(0xff1e3c72), Color(0xff2a5298)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+          ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.logout, size: 60, color: Colors.white),
+              const SizedBox(height: 16),
+              const Text("Logout", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+              const SizedBox(height: 10),
+              const Text("Do you really want to logout?",
+                  style: TextStyle(fontSize: 16, color: Colors.white70), textAlign: TextAlign.center),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey[400], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text("No", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orangeAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text("Yes", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    ) ??
+        false;
+  }
+
+  Future<bool> _showModernDeleteAccountDialog(BuildContext context) async {
+    return await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: const LinearGradient(
+                colors: [Color(0xffa94ee7), Color(0xff2a5298)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+          ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.delete_forever, size: 60, color: Colors.white),
+              const SizedBox(height: 16),
+              const Text("Delete Account",
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+              const SizedBox(height: 10),
+              const Text(
+                "Are you sure you want to delete your account? This action cannot be undone.",
+                style: TextStyle(fontSize: 16, color: Colors.white70),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey[400], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: const Text("Cancel", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: const Text("Delete", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    ) ??
+        false;
+  }
 }
 
-// Screen Loader
 class _ScreenLoader extends StatelessWidget {
   final Widget child;
   final AnimationController animationController;
@@ -483,7 +638,6 @@ class _ScreenLoader extends StatelessWidget {
   }
 }
 
-// Modern Loader
 class ModernLoader extends StatelessWidget {
   final AnimationController animationController;
   const ModernLoader({super.key, required this.animationController});
@@ -521,7 +675,6 @@ class ModernLoader extends StatelessWidget {
   }
 }
 
-// Drawer Tile
 class DrawerTile extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -540,94 +693,4 @@ class DrawerTile extends StatelessWidget {
       horizontalTitleGap: 0,
     );
   }
-}
-
-// Exit Dialog
-Future<bool> _showModernExitDialog(BuildContext context) async {
-  return await showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: const LinearGradient(colors: [Color(0xff004e92), Color(0xff000428)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.exit_to_app, size: 60, color: Colors.white),
-            const SizedBox(height: 16),
-            const Text("Exit App", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
-            const SizedBox(height: 10),
-            const Text("Do you really want to exit the app?", style: TextStyle(fontSize: 16, color: Colors.white70), textAlign: TextAlign.center),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[400], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text("No", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orangeAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text("Yes", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    ),
-  ) ??
-      false;
-}
-
-// Logout Dialog
-Future<bool> _showModernLogoutDialog(BuildContext context) async {
-  return await showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: const LinearGradient(colors: [Color(0xff1e3c72), Color(0xff2a5298)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.logout, size: 60, color: Colors.white),
-            const SizedBox(height: 16),
-            const Text("Logout", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
-            const SizedBox(height: 10),
-            const Text("Do you really want to logout?", style: TextStyle(fontSize: 16, color: Colors.white70), textAlign: TextAlign.center),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[400], shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text("No", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orangeAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text("Yes", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    ),
-  ) ??
-      false;
 }

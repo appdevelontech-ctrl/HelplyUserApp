@@ -315,4 +315,63 @@ class ApiServices {
       };
     }
   }
+
+
+
+
+  // New method to fetch Privacy Policy
+  Future<Map<String, dynamic>> fetchPrivacyPolicy() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/admin/get-page/689c77097fa4afbd4d286457'),
+      );
+
+      print('📩 Fetching Privacy Policy');
+      print('📩 Status: ${response.statusCode}');
+      print('📩 Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final jsonData = jsonDecode(response.body);
+        if (jsonData['success'] == true && jsonData['Mpage'] != null) {
+          return {
+            'success': true,
+            'title': jsonData['Mpage']['title'],
+            'description': jsonData['Mpage']['description'],
+          };
+        } else {
+          throw Exception('Failed to load privacy policy: ${jsonData['message'] ?? 'Unknown error'}');
+        }
+      } else {
+        throw Exception('Failed to load privacy policy (Status code: ${response.statusCode})');
+      }
+    } catch (e) {
+      print('❌ Error fetching privacy policy: $e');
+      throw Exception('Error fetching privacy policy: $e');
+    }
+  }
+
+
+
+  // New method for deleting account
+  Future<Map<String, dynamic>> deleteAccount(String userId) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/admin/update-user/$userId'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'status': '0'}),
+    );
+
+    print('📩 Deleting Account');
+    print('📩 Status: ${response.statusCode}');
+    print('📩 Body: ${response.body}');
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to delete account (Status code: ${response.statusCode})');
+    }
+  }
+
+
+
+
 }

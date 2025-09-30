@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../controllers/user_controller.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -9,8 +10,7 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   final _phoneController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   late AnimationController _animationController;
@@ -27,6 +27,15 @@ class _LoginScreenState extends State<LoginScreen>
       CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
     );
     _animationController.forward();
+
+    // Pre-fill phone number from SharedPreferences if available
+    Future.microtask(() async {
+      final prefs = await SharedPreferences.getInstance();
+      final phone = prefs.getString('phone') ?? '';
+      if (phone.isNotEmpty) {
+        _phoneController.text = phone;
+      }
+    });
   }
 
   @override
@@ -57,8 +66,7 @@ class _LoginScreenState extends State<LoginScreen>
             child: SafeArea(
               child: Center(
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.symmetric(
-                      horizontal: padding, vertical: size.height * 0.05),
+                  padding: EdgeInsets.symmetric(horizontal: padding, vertical: size.height * 0.05),
                   child: FadeTransition(
                     opacity: _fadeAnimation,
                     child: Column(
@@ -66,10 +74,7 @@ class _LoginScreenState extends State<LoginScreen>
                       children: [
                         const Text(
                           "Welcome Back",
-                          style: TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white),
+                          style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
                         SizedBox(height: size.height * 0.02),
                         Form(
@@ -78,10 +83,11 @@ class _LoginScreenState extends State<LoginScreen>
                             controller: _phoneController,
                             keyboardType: TextInputType.phone,
                             style: const TextStyle(color: Colors.white),
+                            autofocus: true,
                             decoration: InputDecoration(
-                              prefixIcon: Icon(Icons.phone,
-                                  color: Colors.white.withOpacity(0.8)),
+                              prefixIcon: Icon(Icons.phone, color: Colors.white.withOpacity(0.8)),
                               labelText: "Phone Number",
+                              labelStyle: TextStyle(color: Colors.white.withOpacity(0.8)),
                               filled: true,
                               fillColor: Colors.white.withOpacity(0.1),
                               border: OutlineInputBorder(
@@ -103,30 +109,30 @@ class _LoginScreenState extends State<LoginScreen>
                         SizedBox(height: size.height * 0.03),
                         controller.isLoading
                             ? const CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.orangeAccent),
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.orangeAccent),
                         )
                             : ElevatedButton(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.orangeAccent,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             padding: EdgeInsets.symmetric(
-                                horizontal: size.width * 0.1,
-                                vertical: size.height * 0.015),
+                              horizontal: size.width * 0.1,
+                              vertical: size.height * 0.015,
+                            ),
                           ),
                           onPressed: () {
                             if (_formKey.currentState!.validate()) {
-                              controller.loginWithPhone(
-                                  _phoneController.text.trim(), context);
+                              controller.errorMessage = null; // Clear previous errors
+                              controller.loginWithPhone(_phoneController.text.trim(), context);
                             }
                           },
                           child: const Text(
                             "Send OTP",
                             style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white),
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                         if (controller.errorMessage != null) ...[
