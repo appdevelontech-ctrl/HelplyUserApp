@@ -16,7 +16,7 @@ class AppUser {
   final String? doc1;
   final String? doc2;
   final String? doc3;
-  final String? profile;
+  final String? profile; // <-- profile image URL
   final String? pHealthHistory;
   final String? cHealthStatus;
   final List<String>? coverage;
@@ -74,15 +74,73 @@ class AppUser {
       doc1: json['Doc1'],
       doc2: json['Doc2'],
       doc3: json['Doc3'],
-      profile: json['profile'],
+      profile: json['profile'], // <-- profile image
       pHealthHistory: json['pHealthHistory'],
       cHealthStatus: json['cHealthStatus'],
       coverage: (json['coverage'] as List<dynamic>?)?.cast<String>(),
       wallet: json['wallet'] as int?,
       online: json['online'] as int?,
       country: json['country'],
-      dob: json['DOB'], // Match payload key casing
-      gender: json['Gender'], // Match payload key casing
+      dob: json['DOB'],       // Match payload key
+      gender: json['Gender'], // Match payload key
+    );
+  }
+
+  // ✅ copyWith method for easy update including profile
+  AppUser copyWith({
+    String? username,
+    String? email,
+    String? phone,
+    int? type,
+    int? empType,
+    String? state,
+    String? statename,
+    String? city,
+    String? address,
+    int? verified,
+    String? pincode,
+    String? about,
+    List<String>? department,
+    String? doc1,
+    String? doc2,
+    String? doc3,
+    String? profile, // <-- new profile URL
+    String? pHealthHistory,
+    String? cHealthStatus,
+    List<String>? coverage,
+    int? wallet,
+    int? online,
+    String? country,
+    String? dob,
+    String? gender,
+  }) {
+    return AppUser(
+      id: id,
+      username: username ?? this.username,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
+      type: type ?? this.type,
+      empType: empType ?? this.empType,
+      state: state ?? this.state,
+      statename: statename ?? this.statename,
+      city: city ?? this.city,
+      address: address ?? this.address,
+      verified: verified ?? this.verified,
+      pincode: pincode ?? this.pincode,
+      about: about ?? this.about,
+      department: department ?? this.department,
+      doc1: doc1 ?? this.doc1,
+      doc2: doc2 ?? this.doc2,
+      doc3: doc3 ?? this.doc3,
+      profile: profile ?? this.profile, // <-- update profile if passed
+      pHealthHistory: pHealthHistory ?? this.pHealthHistory,
+      cHealthStatus: cHealthStatus ?? this.cHealthStatus,
+      coverage: coverage ?? this.coverage,
+      wallet: wallet ?? this.wallet,
+      online: online ?? this.online,
+      country: country ?? this.country,
+      dob: dob ?? this.dob,
+      gender: gender ?? this.gender,
     );
   }
 }

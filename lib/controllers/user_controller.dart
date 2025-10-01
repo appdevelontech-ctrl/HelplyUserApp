@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../main_screen.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/user.dart';
 import '../services/api_services.dart';
 import '../views/auth/login_screen.dart';
@@ -173,7 +174,6 @@ class UserController extends ChangeNotifier {
       throw Exception('Error fetching user details: $e');
     }
   }
-
   Future<bool> updateUserDetails({
     required String userId,
     required String username,
@@ -192,17 +192,34 @@ class UserController extends ChangeNotifier {
     String city = '',
     String about = '',
     String setEmail = '',
+    int? empType,
+    int? verified,
+    List<String>? department,
+    String? doc1,
+    String? doc2,
+    String? doc3,
+    XFile? profileImage,
+    String? pHealthHistory,
+    String? cHealthStatus,
+    List<String>? coverage,
+    int? wallet,
+    int? online,
   }) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
+      String? profileImageUrl;
+      if (profileImage != null) {
+        profileImageUrl = await _uploadProfileImage(userId, profileImage);
+      }
+
       final url = Uri.parse('${ApiServices.baseUrl}/admin/update-user-details/$userId');
       print('📍 Update API URL: $url');
 
       final Map<String, dynamic> payload = {
-        'type': type,
+        'type': type.isNotEmpty ? int.tryParse(type) : _user?.type,
         'username': username.trim(),
         'phone': phone,
         'email': email,
@@ -219,6 +236,18 @@ class UserController extends ChangeNotifier {
         'promoCode': [],
         'password': password,
         'confirm_password': confirmPassword,
+        'empType': empType ?? _user?.empType,
+        'verified': verified ?? _user?.verified,
+        'department': department ?? _user?.department,
+        'Doc1': doc1 ?? _user?.doc1,
+        'Doc2': doc2 ?? _user?.doc2,
+        'Doc3': doc3 ?? _user?.doc3,
+        'pHealthHistory': pHealthHistory ?? _user?.pHealthHistory,
+        'cHealthStatus': cHealthStatus ?? _user?.cHealthStatus,
+        'coverage': coverage ?? _user?.coverage,
+        'wallet': wallet ?? _user?.wallet,
+        'online': online ?? _user?.online,
+        if (profileImageUrl != null) 'profile': profileImageUrl,
       };
 
       print('📩 Payload: ${jsonEncode(payload)}');
@@ -261,6 +290,19 @@ class UserController extends ChangeNotifier {
               country: country,
               city: city,
               about: about,
+              type: int.tryParse(type) ?? _user?.type,
+              empType: empType ?? _user?.empType,
+              verified: verified ?? _user?.verified,
+              department: department ?? _user?.department,
+              doc1: doc1 ?? _user?.doc1,
+              doc2: doc2 ?? _user?.doc2,
+              doc3: doc3 ?? _user?.doc3,
+              profile: profileImageUrl ?? _user?.profile,
+              pHealthHistory: pHealthHistory ?? _user?.pHealthHistory,
+              cHealthStatus: cHealthStatus ?? _user?.cHealthStatus,
+              coverage: coverage ?? _user?.coverage,
+              wallet: wallet ?? _user?.wallet,
+              online: online ?? _user?.online,
             );
 
             // Save to SharedPreferences
@@ -278,6 +320,21 @@ class UserController extends ChangeNotifier {
               await prefs.setString('about', about);
               await prefs.setString('gender', gender);
               await prefs.setString('dob', dob);
+              if (profileImageUrl != null) {
+                await prefs.setString('profile', profileImageUrl);
+              }
+              await prefs.setString('type', type);
+              await prefs.setInt('empType', empType ?? _user?.empType ?? 0);
+              await prefs.setInt('verified', verified ?? _user?.verified ?? 0);
+              await prefs.setStringList('department', department ?? _user?.department ?? []);
+              await prefs.setString('doc1', doc1 ?? _user?.doc1 ?? '');
+              await prefs.setString('doc2', doc2 ?? _user?.doc2 ?? '');
+              await prefs.setString('doc3', doc3 ?? _user?.doc3 ?? '');
+              await prefs.setString('pHealthHistory', pHealthHistory ?? _user?.pHealthHistory ?? '');
+              await prefs.setString('cHealthStatus', cHealthStatus ?? _user?.cHealthStatus ?? '');
+              await prefs.setStringList('coverage', coverage ?? _user?.coverage ?? []);
+              await prefs.setInt('wallet', wallet ?? _user?.wallet ?? 0);
+              await prefs.setInt('online', online ?? _user?.online ?? 0);
               print("💾 User details updated in SharedPreferences ✅");
             } catch (e) {
               print('❌ Error saving to SharedPreferences: $e');
@@ -314,6 +371,30 @@ class UserController extends ChangeNotifier {
     }
   }
 
+  Future<String?> _uploadProfileImage(String userId, XFile image) async {
+    try {
+      final url = Uri.parse('${ApiServices.baseUrl}/upload-profile-image/$userId');
+      final request = http.MultipartRequest('POST', url);
+      request.files.add(await http.MultipartFile.fromPath('profile', image.path));
+      final response = await request.send();
+
+      if (response.statusCode == 200) {
+        final responseData = await response.stream.bytesToString();
+        final jsonData = jsonDecode(responseData);
+        if (jsonData['success'] == true && jsonData['imageUrl'] != null) {
+          print('✅ Profile image uploaded: ${jsonData['imageUrl']}');
+          return jsonData['imageUrl'];
+        } else {
+          throw Exception(jsonData['message'] ?? 'Failed to upload profile image');
+        }
+      } else {
+        throw Exception('Failed to upload profile image (Status code: ${response.statusCode})');
+      }
+    } catch (e) {
+      print('❌ Error uploading profile image: $e');
+      throw Exception('Error uploading profile image: $e');
+    }
+  }
   Future<void> checkLoginStatus(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
     final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;

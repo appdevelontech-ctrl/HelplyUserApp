@@ -50,6 +50,7 @@
     fluttertoast: ^8.2.2
     razorpay_flutter: ^1.4.0
     url_launcher: ^6.3.2
+    image_picker: ^1.2.0
 
 
 
