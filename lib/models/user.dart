@@ -13,10 +13,9 @@ class AppUser {
   final String? pincode;
   final String? about;
   final List<String>? department;
-  final String? doc1;
+  final String? doc1; // <-- profile image URL
   final String? doc2;
   final String? doc3;
-  final String? profile; // <-- profile image URL
   final String? pHealthHistory;
   final String? cHealthStatus;
   final List<String>? coverage;
@@ -44,7 +43,6 @@ class AppUser {
     this.doc1,
     this.doc2,
     this.doc3,
-    this.profile,
     this.pHealthHistory,
     this.cHealthStatus,
     this.coverage,
@@ -74,7 +72,6 @@ class AppUser {
       doc1: json['Doc1'],
       doc2: json['Doc2'],
       doc3: json['Doc3'],
-      profile: json['profile'], // <-- profile image
       pHealthHistory: json['pHealthHistory'],
       cHealthStatus: json['cHealthStatus'],
       coverage: (json['coverage'] as List<dynamic>?)?.cast<String>(),
@@ -86,7 +83,7 @@ class AppUser {
     );
   }
 
-  // ✅ copyWith method for easy update including profile
+  // ✅ copyWith method for easy update including doc1 as profile
   AppUser copyWith({
     String? username,
     String? email,
@@ -101,10 +98,9 @@ class AppUser {
     String? pincode,
     String? about,
     List<String>? department,
-    String? doc1,
+    String? doc1, // <-- new profile URL
     String? doc2,
     String? doc3,
-    String? profile, // <-- new profile URL
     String? pHealthHistory,
     String? cHealthStatus,
     List<String>? coverage,
@@ -129,10 +125,9 @@ class AppUser {
       pincode: pincode ?? this.pincode,
       about: about ?? this.about,
       department: department ?? this.department,
-      doc1: doc1 ?? this.doc1,
+      doc1: doc1 ?? this.doc1, // <-- update doc1 if passed
       doc2: doc2 ?? this.doc2,
       doc3: doc3 ?? this.doc3,
-      profile: profile ?? this.profile, // <-- update profile if passed
       pHealthHistory: pHealthHistory ?? this.pHealthHistory,
       cHealthStatus: cHealthStatus ?? this.cHealthStatus,
       coverage: coverage ?? this.coverage,

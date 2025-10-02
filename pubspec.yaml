@@ -51,6 +51,7 @@
     razorpay_flutter: ^1.4.0
     url_launcher: ^6.3.2
     image_picker: ^1.2.0
+    socket_io_client: ^3.1.2
 
 
 
@@ -84,7 +85,7 @@
 
     # To add assets to your application, add an assets section, like this:
     assets:
-      - assets/images/fallback_image.webp
+      - assets/images/
       - assets/icons/back.png
     #   - images/a_dot_ham.jpeg
 
@@ -114,8 +115,8 @@
     # For details regarding fonts from package dependencies,
     # see https://flutter.dev/to/font-from-package
   flutter_launcher_icons:
-      android: true
-      ios: true
-      image_path: "assets/icons/icon.jpg"
-      adaptive_icon_background: "#ffffff"
-      adaptive_icon_foreground: "assets/icons/icon.jpg"
+    android: true
+    ios: true
+    adaptive_icon_background: "#ffffff" # or transparent
+    adaptive_icon_foreground: "assets/icons/icon.jpg"
+    image_path: "assets/icons/icon.jpg"

@@ -152,12 +152,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _pickProfileImage() async {
-    // final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-    // if (pickedFile != null && mounted) {
-    //   setState(() {
-    //     _profileImage = pickedFile;
-    //   });
-    // }
+    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null && mounted) {
+      setState(() {
+        _profileImage = pickedFile;
+      });
+    }
   }
 
   @override
@@ -317,7 +317,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         if (userId.isNotEmpty) {
                           await controller.fetchUserDetails(userId);
                         }
-                      },
+                       },
                       child: const Text(
                         'Retry',
                         style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
@@ -337,34 +337,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     children: [
                       // Profile Image
                       GestureDetector(
-                        onTap: _isEditing ? _pickProfileImage : null,
+
                         child: Stack(
                           alignment: Alignment.bottomRight,
                           children: [
                             CircleAvatar(
                               radius: avatarRadius,
                               backgroundColor: Colors.white.withOpacity(0.1),
-                              backgroundImage: _profileImage != null
-                                  ? FileImage(File(_profileImage!.path))
-                                  : user.profile != null && user.profile!.isNotEmpty
-                                  ? NetworkImage(user.profile!)
-                                  : NetworkImage(
+                              backgroundImage:   NetworkImage(
                                 'https://i.pravatar.cc/150?img=${(user.username ?? 'User').hashCode % 70}',
                               ) as ImageProvider,
                             ),
-                            if (_isEditing)
-                              Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: const BoxDecoration(
-                                  color: Colors.orangeAccent,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.camera_alt,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                              ),
+
                           ],
                         ),
                       ),
@@ -480,118 +464,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 },
                                 keyboardType: TextInputType.number,
                               ),
+
                               const Divider(color: Colors.white38),
-                              ProfileInfoRow(
-                                icon: Icons.location_city,
-                                label: 'State Name',
-                                value: user.statename ?? 'Not provided',
-                                controller: _statenameController,
-                                isEditing: _isEditing,
-                              ),
-                              const Divider(color: Colors.white38),
-                              ProfileInfoRow(
-                                icon: Icons.public,
-                                label: 'Country',
-                                value: user.country ?? 'Not provided',
-                                controller: _countryController,
-                                isEditing: _isEditing,
-                              ),
-                              const Divider(color: Colors.white38),
-                              ProfileInfoRow(
-                                icon: Icons.location_city,
-                                label: 'City',
-                                value: user.city ?? 'Not provided',
-                                controller: _cityController,
-                                isEditing: _isEditing,
-                              ),
-                              const Divider(color: Colors.white38),
-                              ProfileInfoRow(
-                                icon: Icons.info,
-                                label: 'About',
-                                value: user.about ?? 'Not provided',
-                                controller: _aboutController,
-                                isEditing: _isEditing,
-                                keyboardType: TextInputType.multiline,
-                                maxLines: 3,
-                              ),
-                              const Divider(color: Colors.white38),
-                              ProfileInfoRow(
-                                icon: Icons.work,
-                                label: 'Department',
-                                value: user.department?.join(', ') ?? 'Not provided',
-                                controller: _departmentController,
-                                isEditing: _isEditing,
-                              ),
-                              const Divider(color: Colors.white38),
-                              ProfileInfoRow(
-                                icon: Icons.description,
-                                label: 'Document 1',
-                                value: user.doc1 ?? 'Not provided',
-                                controller: _doc1Controller,
-                                isEditing: _isEditing,
-                              ),
-                              const Divider(color: Colors.white38),
-                              ProfileInfoRow(
-                                icon: Icons.description,
-                                label: 'Document 2',
-                                value: user.doc2 ?? 'Not provided',
-                                controller: _doc2Controller,
-                                isEditing: _isEditing,
-                              ),
-                              const Divider(color: Colors.white38),
-                              ProfileInfoRow(
-                                icon: Icons.description,
-                                label: 'Document 3',
-                                value: user.doc3 ?? 'Not provided',
-                                controller: _doc3Controller,
-                                isEditing: _isEditing,
-                              ),
-                              const Divider(color: Colors.white38),
-                              ProfileInfoRow(
-                                icon: Icons.healing,
-                                label: 'Previous Health History',
-                                value: user.pHealthHistory ?? 'Not provided',
-                                controller: _pHealthHistoryController,
-                                isEditing: _isEditing,
-                                keyboardType: TextInputType.multiline,
-                                maxLines: 3,
-                              ),
-                              const Divider(color: Colors.white38),
-                              ProfileInfoRow(
-                                icon: Icons.health_and_safety,
-                                label: 'Current Health Status',
-                                value: user.cHealthStatus ?? 'Not provided',
-                                controller: _cHealthStatusController,
-                                isEditing: _isEditing,
-                                keyboardType: TextInputType.multiline,
-                                maxLines: 3,
-                              ),
-                              const Divider(color: Colors.white38),
-                              ProfileInfoRow(
-                                icon: Icons.security,
-                                label: 'Coverage',
-                                value: user.coverage?.join(', ') ?? 'Not provided',
-                                controller: _coverageController,
-                                isEditing: _isEditing,
-                              ),
-                              const Divider(color: Colors.white38),
-                              ProfileInfoRow(
-                                icon: Icons.category,
-                                label: 'Type',
-                                value: user.type?.toString() ?? 'Not provided',
-                                controller: _typeController,
-                                isEditing: _isEditing,
-                                keyboardType: TextInputType.number,
-                                validator: (value) {
-                                  if (value != null && value.isNotEmpty) {
-                                    if (int.tryParse(value) == null) {
-                                      return 'Please enter a valid number';
-                                    }
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const Divider(color: Colors.white38),
+
                               ProfileInfoRow(
                                 icon: Icons.person_outline,
                                 label: 'Gender',
@@ -666,27 +541,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 )
                                     : null,
                               ),
-                              const Divider(color: Colors.white38),
-                              ProfileInfoRow(
-                                icon: Icons.verified,
-                                label: 'Verified',
-                                value: user.verified == 1 ? 'Yes' : 'No',
-                                isEditing: false, // Read-only
-                              ),
-                              const Divider(color: Colors.white38),
-                              ProfileInfoRow(
-                                icon: Icons.account_balance_wallet,
-                                label: 'Wallet',
-                                value: user.wallet?.toString() ?? '0',
-                                isEditing: false, // Read-only
-                              ),
-                              const Divider(color: Colors.white38),
-                              ProfileInfoRow(
-                                icon: Icons.online_prediction,
-                                label: 'Online Status',
-                                value: user.online == 1 ? 'Online' : 'Offline',
-                                isEditing: false, // Read-only
-                              ),
+
+
                             ],
                           ),
                         ),

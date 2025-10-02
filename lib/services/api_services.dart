@@ -191,7 +191,6 @@ class ApiServices {
       throw Exception('Error fetching orders: $e');
     }
   }
-
   Future<Order> fetchOrderDetails(String userId, String orderId) async {
     try {
       print('📩 Fetching order details for userId: $userId, orderId: $orderId');
@@ -211,7 +210,16 @@ class ApiServices {
         if (data['success'] == true && data['userOrder'] != null) {
           final userOrderResponse = UserOrderResponse.fromJson(data);
           print('📦 Order Details Fetched: Order _id $orderId');
-          return userOrderResponse.userOrder.order!;
+          Order? order = userOrderResponse.userOrder.order;
+          if (order == null) {
+            // Fallback: Parse order directly from userOrder JSON (backend returns order fields directly)
+            final userOrderJson = data['userOrder'] as Map<String, dynamic>;
+            order = Order.fromJson(userOrderJson);
+          }
+          if (order.id.isEmpty) {
+            throw Exception('Failed to fetch order details: Invalid order data in response');
+          }
+          return order;
         } else {
           throw Exception('Failed to fetch order details: ${data['message'] ?? 'Unknown error'}');
         }
@@ -224,7 +232,6 @@ class ApiServices {
       throw Exception('Error fetching order details: $e');
     }
   }
-
   Future<Map<String, dynamic>> createOrder(String userId, Map<String, dynamic> orderData) async {
     try {
       final url = Uri.parse('$baseUrl/create-order/$userId');
@@ -246,7 +253,7 @@ class ApiServices {
           return {
             'success': true,
             'message': jsonData['message'] ?? 'Order created successfully',
-            'order': jsonData['order'],
+            'order': jsonData['newOrder'], // Fixed: Use 'newOrder' from response
           };
         } else {
           throw Exception(jsonData['message'] ?? 'Failed to create order');
@@ -259,8 +266,6 @@ class ApiServices {
       throw Exception('Error creating order: $e');
     }
   }
-
-
   // 1️⃣ Create Payment Order
   Future<Map<String, dynamic>> createPaymentOrder(Map<String, dynamic> payload) async {
     final url = Uri.parse('$baseUrl/order-payment');

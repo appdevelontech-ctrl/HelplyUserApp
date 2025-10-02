@@ -6,8 +6,9 @@ import '../models/order_model.dart';
 import '../services/api_services.dart';
 import '../services/payment_service.dart';
 import 'package:shimmer/shimmer.dart';
+import '../controllers/socket_controller.dart';
+import 'live_tracking_page.dart';
 import 'order_detail_page.dart';
-
 
 class UserOrdersPage extends StatefulWidget {
   const UserOrdersPage({super.key});
@@ -116,7 +117,8 @@ class _UserOrdersPageState extends State<UserOrdersPage> {
         itemCount: 5,
         itemBuilder: (context, index) => Card(
           margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: 4,
           child: ListTile(
             contentPadding: const EdgeInsets.all(16),
@@ -139,8 +141,11 @@ class _UserOrdersPageState extends State<UserOrdersPage> {
     );
   }
 
-  Widget _buildOrderCard(BuildContext context, Order order, OrderController controller) {
+  Widget _buildOrderCard(
+      BuildContext context, Order order, OrderController controller) {
     final paymentService = PaymentService(context, ApiServices());
+    final socketController =
+        Provider.of<SocketController>(context, listen: false);
 
     return GestureDetector(
       onTap: () {
@@ -242,20 +247,20 @@ class _UserOrdersPageState extends State<UserOrdersPage> {
                 ],
               ),
               const SizedBox(height: 12),
-
-              // ✅ Button logic
               if (order.status == 7)
                 Align(
                   alignment: Alignment.centerRight,
                   child: ElevatedButton(
                     onPressed: (order.payment == 1)
-                        ? null // Disable button if already paid
+                        ? null
                         : () {
-                      print('🚀 Pay clicked for order ID: ${order.orderId}, _id: ${order.id}');
-                      paymentService.initiatePayment(order);
-                    },
+                            print(
+                                '🚀 Pay clicked for order ID: ${order.orderId}, _id: ${order.id}');
+                            paymentService.initiatePayment(order);
+                          },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: (order.payment == 1) ? Colors.grey : Colors.green,
+                      backgroundColor:
+                          (order.payment == 1) ? Colors.grey : Colors.green,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -269,7 +274,35 @@ class _UserOrdersPageState extends State<UserOrdersPage> {
                     ),
                   ),
                 ),
-              // 🔹 Button will NOT appear if status != 7
+              if (order.status != 5 &&
+                  (order.maidLat != null || order.maidLng != null))
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      print(
+                          '🚀 Live Track clicked for order ID: ${order.orderId}, _id: ${order.id}');
+                      socketController.trackOrder(order.id);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              LiveTrackingPage(orderId: order.id),
+                        ),
+                      ).then((value) {
+// Optional: Handle return from LiveTrackingPage if needed
+                      });
+                    },
+                    icon: const Icon(Icons.location_on),
+                    label: const Text("Live Track"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -306,7 +339,9 @@ class _UserOrdersPageState extends State<UserOrdersPage> {
         style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: chipColor.computeLuminance() > 0.5 ? Colors.black87 : Colors.white,
+          color: chipColor.computeLuminance() > 0.5
+              ? Colors.black87
+              : Colors.white,
         ),
       ),
       backgroundColor: chipColor,
