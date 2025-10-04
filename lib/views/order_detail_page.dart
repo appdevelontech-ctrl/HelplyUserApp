@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:user_app/services/api_services.dart';
 import '../models/order_model.dart';
 import '../controllers/order_controller.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class OrderDetailsPage extends StatefulWidget {
   final String orderId;
@@ -30,10 +33,41 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         setState(() {
           _errorMessage = e.toString();
           if (e.toString().contains('Status code: 404')) {
-            _errorMessage = 'Order not found. Please check the order ID or contact support.';
+            _errorMessage =
+            'Order not found. Please check the order ID or contact support.';
           }
         });
       });
+    }
+  }
+
+  Future<void> _downloadInvoice(String invoiceId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiServices.baseUrl}/download-invoice-order'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({"invoiceId": invoiceId}),
+      );
+      print('Response is : ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        print("data is  $data");
+        if (data['success'] == true) {
+          // Handle the invoice download (e.g., open file or show success message)
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Invoice downloaded successfully')),
+          );
+        } else {
+          throw Exception('Failed to download invoice: ${data['message']}');
+        }
+      } else {
+        throw Exception('Failed to download invoice: ${response.statusCode}');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error downloading invoice: $e')),
+      );
     }
   }
 
@@ -46,7 +80,9 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         body: Consumer<OrderController>(
           builder: (context, controller, child) {
             if (controller.loading) {
-              return const Center(child: CircularProgressIndicator(color: Colors.orangeAccent));
+              return const Center(
+                  child:
+                  CircularProgressIndicator(color: Colors.orangeAccent));
             }
 
             if (_errorMessage != null) {
@@ -97,11 +133,23 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                 children: [
                   _buildOrderHeader(context, order),
                   const SizedBox(height: 16),
-                  _buildUserDetails(context, order), // New section for user details
+                  _buildUserDetails(context, order),
                   const SizedBox(height: 16),
                   _buildOrderDetails(context, order),
                   const SizedBox(height: 16),
                   if (order.items.isNotEmpty) _buildItemsList(context, order),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => _downloadInvoice(order.id), // Use order.id as invoiceId
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text(
+                      'Download Invoice',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  ),
                 ],
               ),
             );
@@ -207,7 +255,8 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
               ),
             ),
             const SizedBox(height: 12),
-            _buildDetailRow("Total Amount", "₹${order.totalAmount.toStringAsFixed(2)}"),
+            _buildDetailRow(
+                "Total Amount", "₹${order.totalAmount.toStringAsFixed(2)}"),
             _buildDetailRow("Payment Mode", order.mode),
             if (order.otp != null) _buildDetailRow("OTP", order.otp.toString()),
             _buildDetailRow("Payment Status", order.payment == 1 ? "Paid" : "Pending"),
@@ -250,7 +299,8 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                       width: 50,
                       height: 50,
                       fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.error, size: 50),
+                      errorBuilder: (context, error, stackTrace) =>
+                      const Icon(Icons.error, size: 50),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -321,16 +371,16 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     Color chipColor;
     switch (status) {
       case 0:
-        chipColor = Colors.orange.shade100;
+        chipColor = Colors.red.shade100;
         break;
       case 1:
-        chipColor = Colors.blue.shade100;
+        chipColor = Colors.orange.shade100;
         break;
       case 2:
         chipColor = Colors.purple.shade100;
         break;
       case 5:
-        chipColor = Colors.red.shade100;
+        chipColor = Colors.blue.shade100;
         break;
       case 7:
         chipColor = Colors.green.shade100;
@@ -345,7 +395,9 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: chipColor.computeLuminance() > 0.5 ? Colors.black87 : Colors.white,
+          color: chipColor.computeLuminance() > 0.5
+              ? Colors.black87
+              : Colors.white,
         ),
       ),
       backgroundColor: chipColor,
@@ -357,15 +409,15 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
   String _statusText(int status) {
     switch (status) {
       case 0:
-        return "Pending";
-      case 1:
-        return "Confirmed";
-      case 2:
-        return "Processing";
-      case 5:
         return "Cancelled";
+      case 1:
+        return "Placed";
+      case 2:
+        return "Accept";
+      case 5:
+        return "Started";
       case 7:
-        return "Delivered";
+        return "Complete";
       default:
         return "Unknown";
     }

@@ -40,10 +40,50 @@ class _CartPageState extends State<CartPage> {
   int _currentStep = 0;
   bool _isLoading = false;
 
+  // List of valid states
+  final List<String> _states = [
+    "Andhra Pradesh",
+    "Arunachal Pradesh",
+    "Assam",
+    "Bihar",
+    "Chhattisgarh",
+    "Goa",
+    "Gujarat",
+    "Haryana",
+    "Himachal Pradesh",
+    "Jharkhand",
+    "Karnataka",
+    "Kerala",
+    "Madhya Pradesh",
+    "Maharashtra",
+    "Manipur",
+    "Meghalaya",
+    "Mizoram",
+    "Nagaland",
+    "Odisha",
+    "Punjab",
+    "Rajasthan",
+    "Sikkim",
+    "Tamil Nadu",
+    "Telangana",
+    "Tripura",
+    "Uttar Pradesh",
+    "Uttarakhand",
+    "West Bengal",
+    "Andaman and Nicobar Islands",
+    "Chandigarh",
+    "Dadra and Nagar Haveli and Daman and Diu",
+    "Delhi",
+    "Jammu and Kashmir",
+    "Ladakh",
+    "Lakshadweep",
+    "Puducherry"
+  ];
+
   @override
   void initState() {
     super.initState();
-    _googlePlace = GooglePlace('AIzaSyCcppZWLo75ylSQvsR-bTPZLEFEEec5nrY'); // Your Google API key
+    _googlePlace = GooglePlace('AIzaSyCcppZWLo75ylSQvsR-bTPZLEFEEec5nrY');
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadUserDetails();
     });
@@ -65,7 +105,9 @@ class _CartPageState extends State<CartPage> {
             _emailController.text = updatedPrefs.getString('email') ?? '';
             _pincodeController.text = updatedPrefs.getString('pincode') ?? '';
             _addressController.text = updatedPrefs.getString('address') ?? '';
-            _selectedState = updatedPrefs.getString('state') ?? '';
+            // Validate state against the _states list
+            final storedState = updatedPrefs.getString('state');
+            _selectedState = _states.contains(storedState) ? storedState : null;
           });
         }
       } catch (e) {
@@ -145,12 +187,14 @@ class _CartPageState extends State<CartPage> {
           );
           return;
         }
+        // Save state to SharedPreferences
+        final prefs = SharedPreferences.getInstance();
+        prefs.then((p) => p.setString('state', _selectedState ?? ''));
         _pageController.nextPage(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
         );
         setState(() => _currentStep++);
-
       }
     } else if (_currentStep == 2) {
       _confirmPayment();
@@ -166,6 +210,7 @@ class _CartPageState extends State<CartPage> {
       setState(() => _currentStep--);
     }
   }
+
   Future<void> _confirmPayment() async {
     setState(() => _isLoading = true);
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
@@ -220,16 +265,14 @@ class _CartPageState extends State<CartPage> {
         'verified': 1,
       };
 
-      print('Order Data: ${jsonEncode(orderData)}'); // Debug payload
+      print('Order Data: ${jsonEncode(orderData)}');
 
       final result = await _apiServices.createOrder(userId, orderData);
 
-
-      // Prepare and send socket notification
-      final newOrder = result['order']; // Now correctly accesses the returned 'order'
+      final newOrder = result['order'];
       if (newOrder != null) {
         final sendmsg = {
-          'userId': newOrder['userId']?[0] ?? newOrder['userId'] ?? userId, // Handle array or string
+          'userId': newOrder['userId']?[0] ?? newOrder['userId'] ?? userId,
           'type': 'book',
           'order': newOrder,
           'orderId': newOrder['orderId'],
@@ -242,10 +285,9 @@ class _CartPageState extends State<CartPage> {
       cartProvider.clearCart();
       setState(() => _isLoading = false);
 
-      // Enhanced dialog with orderId and styling
       showDialog(
         context: context,
-        barrierDismissible: false, // Prevent dismissing by tapping outside
+        barrierDismissible: false,
         builder: (context) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           title: Row(
@@ -289,7 +331,7 @@ class _CartPageState extends State<CartPage> {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => MainScreen())); // Back to home
+                Navigator.push(context, MaterialPageRoute(builder: (context) => MainScreen()));
               },
               style: TextButton.styleFrom(
                 foregroundColor: Colors.blue,
@@ -316,7 +358,6 @@ class _CartPageState extends State<CartPage> {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
 
-    // Check if cart is empty
     if (cartProvider.cartItems.isEmpty) {
       return Scaffold(
         body: Center(
@@ -342,7 +383,6 @@ class _CartPageState extends State<CartPage> {
       );
     }
 
-    // Original UI when cart is not empty
     return Scaffold(
       body: Column(
         children: [
@@ -721,44 +761,12 @@ class _CartPageState extends State<CartPage> {
                             value: _selectedState,
                             isExpanded: true,
                             decoration: _inputDecoration("State"),
-                            items: [
-                              "Andhra Pradesh",
-                              "Arunachal Pradesh",
-                              "Assam",
-                              "Bihar",
-                              "Chhattisgarh",
-                              "Goa",
-                              "Gujarat",
-                              "Haryana",
-                              "Himachal Pradesh",
-                              "Jharkhand",
-                              "Karnataka",
-                              "Kerala",
-                              "Madhya Pradesh",
-                              "Maharashtra",
-                              "Manipur",
-                              "Meghalaya",
-                              "Mizoram",
-                              "Nagaland",
-                              "Odisha",
-                              "Punjab",
-                              "Rajasthan",
-                              "Sikkim",
-                              "Tamil Nadu",
-                              "Telangana",
-                              "Tripura",
-                              "Uttar Pradesh",
-                              "Uttarakhand",
-                              "West Bengal",
-                              "Andaman and Nicobar Islands",
-                              "Chandigarh",
-                              "Dadra and Nagar Haveli and Daman and Diu",
-                              "Delhi",
-                              "Jammu and Kashmir",
-                              "Ladakh",
-                              "Lakshadweep",
-                              "Puducherry"
-                            ].map((state) => DropdownMenuItem(value: state, child: Text(state))).toList(),
+                            items: _states
+                                .map((state) => DropdownMenuItem(
+                              value: state,
+                              child: Text(state),
+                            ))
+                                .toList(),
                             onChanged: (val) => setState(() => _selectedState = val),
                             validator: (val) => val == null ? "Select a state" : null,
                           ),
@@ -913,22 +921,7 @@ class _CartPageState extends State<CartPage> {
                     ),
                   ),
                   SizedBox(height: screenWidth * 0.02),
-                  RadioListTile<String>(
-                    title: const Text('Credit Card'),
-                    value: 'Credit Card',
-                    groupValue: _selectedPaymentMethod,
-                    onChanged: (value) => setState(() => _selectedPaymentMethod = value!),
-                    activeColor: Colors.blue,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  RadioListTile<String>(
-                    title: const Text('UPI'),
-                    value: 'UPI',
-                    groupValue: _selectedPaymentMethod,
-                    onChanged: (value) => setState(() => _selectedPaymentMethod = value!),
-                    activeColor: Colors.blue,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
+
                   RadioListTile<String>(
                     title: const Text('Cash on Delivery'),
                     value: 'Cash on Delivery',

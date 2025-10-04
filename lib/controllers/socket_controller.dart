@@ -1,175 +1,209 @@
-
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
-import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../controllers/order_controller.dart';
-import '../models/order_model.dart';
-import 'package:flutter/material.dart';
 
 class SocketController with ChangeNotifier {
-static final SocketController _instance = SocketController._internal();
-factory SocketController() => _instance;
-SocketController._internal();
+  static final SocketController _instance = SocketController._internal();
+  factory SocketController() => _instance;
+  SocketController._internal();
 
-IO.Socket? socket;
-bool _isConnected = false;
-bool _isDisposed = false;
-final List<Map<String, dynamic>> _pendingMessages = [];
-int _reconnectionAttempts = 0;
-static const int _maxReconnectionAttempts = 5;
+  IO.Socket? socket;
+  bool _isConnected = false;
+  bool _isDisposed = false;
+  final List<Map<String, dynamic>> _pendingMessages = [];
+  int _reconnectionAttempts = 0;
+  static const int _maxReconnectionAttempts = 5;
 
-bool get isConnected => _isConnected;
+  final Set<String> _liveOrders = {};
+  OrderController? orderController;
 
-void connect({BuildContext? context}) {
-if (_isDisposed) return;
 
-if (socket != null && socket!.connected) {
-print('🔌 Socket already connected at ${DateTime.now().toIso8601String()}');
-return;
-}
+  /// Global callback for maid_started_order
+  void Function(String orderId, Map<String, dynamic> maidInfo)? onMaidStartedOrder;
 
-socket = IO.io(
-'wss://backend-olxs.onrender.com',
-IO.OptionBuilder()
-    .setTransports(['websocket'])
-    .enableReconnection()
-    .setReconnectionDelay(2000)
-    .setReconnectionAttempts(_maxReconnectionAttempts)
-    .enableForceNew()
-    .enableAutoConnect()
-    .setTimeout(20000)
-    .build(),
-);
+  /// Attach OrderController to update orders automatically
+  void attachOrderController(OrderController controller) {
+    orderController = controller;
+  }
 
-if (socket == null) {
-print('⚠️ Socket initialization failed at ${DateTime.now().toIso8601String()}');
-return;
-}
+  bool get isConnected => _isConnected;
+  bool isOrderLive(String orderId) => _liveOrders.contains(orderId);
 
-socket!.onConnect((_) {
-_isConnected = true;
-_reconnectionAttempts = 0;
-print('🔌 Socket connected ✅ at ${DateTime.now().toIso8601String()}');
-notifyListeners();
-if (_pendingMessages.isNotEmpty) {
-for (var msg in _pendingMessages) {
-socket!.emit('chat message', msg);
-print('📤 Flushed queued message: $msg at ${DateTime.now().toIso8601String()}');
-}
-_pendingMessages.clear();
-}
-});
+  /// Connect to socket
+  void connect() {
+    if (_isDisposed) return;
+    if (socket != null && socket!.connected) return;
 
-socket!.onDisconnect((_) {
-_isConnected = false;
-print('🔌 Socket disconnected ❌ at ${DateTime.now().toIso8601String()}');
-notifyListeners();
-_reconnect(context);
-});
+    socket = IO.io(
+      'wss://backend-olxs.onrender.com',
+      IO.OptionBuilder()
+          .setTransports(['websocket'])
+          .enableReconnection()
+          .setReconnectionDelay(2000)
+          .setReconnectionAttempts(_maxReconnectionAttempts)
+          .enableForceNew()
+          .enableAutoConnect()
+          .setTimeout(20000)
+          .build(),
+    );
 
-socket!.onConnectError((error) {
-_isConnected = false;
-print('❌ Socket connect error: $error at ${DateTime.now().toIso8601String()}');
-notifyListeners();
-_reconnect(context);
-});
+    socket?.onConnect((_) async {
+      _isConnected = true;
+      _reconnectionAttempts = 0;
+      notifyListeners();
 
-socket!.onError((error) {
-print('❌ Socket error: $error at ${DateTime.now().toIso8601String()}');
-});
+      for (var msg in _pendingMessages) socket!.emit('chat message', msg);
+      _pendingMessages.clear();
+      print('🔌 Socket connected ✅');
 
-socket!.on('maid_started_order', (data) {
-if (socket == null || !socket!.connected) {
-print('⚠️ Socket not connected, dropping maid_started_order at ${DateTime.now().toIso8601String()}');
-return;
-}
-print('📩 Received maid_started_order raw data: $data at ${DateTime.now().toIso8601String()}');
-if (data is Map) {
-try {
-final orderId = data['orderId']?.toString() ?? data['orderDetails']?['orderId']?.toString();
-if (orderId == null) throw Exception('orderId not found in payload');
-final orderDetails = data['orderDetails'] as Map? ?? {};
-final maidInfo = {
-'maidName': data['maidName'] as String? ?? 'Unknown Maid',
-'maidPhone': data['maidPhone'] as String? ?? '',
-'maidEmail': data['maidEmail'] as String? ?? '',
-'maidLat': double.tryParse(data['maidLat'].toString()) ??
-(orderDetails['latitude'] != null ? double.tryParse(orderDetails['latitude'].toString()) ?? 0.0 : 0.0) ??
-(orderDetails['lat'] != null ? double.tryParse(orderDetails['lat'].toString()) ?? 0.0 : 0.0),
-'maidLng': double.tryParse(data['maidLng'].toString()) ??
-(orderDetails['longitude'] != null ? double.tryParse(orderDetails['longitude'].toString()) ?? 0.0 : 0.0) ??
-(orderDetails['lng'] != null ? double.tryParse(orderDetails['lng'].toString()) ?? 0.0 : 0.0),
-'status': data['status'] as String? ?? 'Started',
-};
-print('📦 Processed maid info for orderId: $orderId - $maidInfo at ${DateTime.now().toIso8601String()}');
-_updateOrderWithMaidInfo(orderId, maidInfo, context);
-} catch (e) {
-print('❌ Error processing maid_started_order: $e - Raw data: $data at ${DateTime.now().toIso8601String()}');
-}
-} else {
-print('⚠️ Invalid maid_started_order data format: $data at ${DateTime.now().toIso8601String()}');
-}
-});
+      // Load persisted maid info on reconnect
+      await _loadPersistedMaidInfo();
+    });
 
-socket!.on('chat message', (data) {
-print('📩 Received chat message: $data at ${DateTime.now().toIso8601String()}');
-});
-}
+    socket?.onDisconnect((_) {
+      _isConnected = false;
+      notifyListeners();
+      print('🔌 Socket disconnected ❌');
+      _reconnect();
+    });
 
-void _reconnect(BuildContext? context) {
-if (_reconnectionAttempts < _maxReconnectionAttempts) {
-_reconnectionAttempts++;
-print('🔄 Reconnecting attempt #$_reconnectionAttempts at ${DateTime.now().toIso8601String()}');
-Future.delayed(const Duration(seconds: 2), () => connect(context: context));
-} else {
-print('⚠️ Max reconnection attempts reached at ${DateTime.now().toIso8601String()}');
-}
-}
+    socket?.onConnectError((error) {
+      _isConnected = false;
+      notifyListeners();
+      print('❌ Socket connect error: $error');
+      _reconnect();
+    });
 
-void _updateOrderWithMaidInfo(String orderId, Map<String, dynamic> maidInfo, BuildContext? context) {
-if (context != null) {
-final orderController = Provider.of<OrderController>(context, listen: false);
-orderController.updateMaidInfo(orderId, maidInfo);
-print('✅ Updated OrderController with maid info for orderId: $orderId at ${DateTime.now().toIso8601String()}');
-} else {
-print('⚠️ Context is null, unable to update OrderController at ${DateTime.now().toIso8601String()}');
-}
-}
+    socket?.onError((error) {
+      print('❌ Socket error: $error');
+    });
 
-Future<void> sendOrderNotification(Map<String, dynamic> payload) async {
-if (_isDisposed) return;
+    socket?.on('chat message', (data) async {
+      if (data is! Map<String, dynamic>) return;
 
-if (!_isConnected) {
-print('⚠️ Socket not connected, saving to queue... at ${DateTime.now().toIso8601String()}');
-_pendingMessages.add(payload);
-return;
-}
+      final orderData = data['order'] as Map<String, dynamic>? ?? {};
+      final orderDetails = orderData['orderDetails'] as Map<String, dynamic>? ?? {};
+      final orderId = orderData['orderId']?.toString() ??
+          orderDetails['orderId']?.toString();
+      if (orderId == null) return;
 
-try {
-print('📤 Sending order notification: $payload at ${DateTime.now().toIso8601String()}');
-socket!.emit('chat message', payload);
-print('✅ Order notification sent successfully at ${DateTime.now().toIso8601String()}');
-} catch (e) {
-print('❌ Error sending order notification: $e at ${DateTime.now().toIso8601String()}');
-}
-}
+      final maidLat = _parseDouble(orderData['maidLat']);
+      final maidLng = _parseDouble(orderData['maidLng']);
 
-void trackOrder(String orderId) {
-if (_isConnected && socket != null) {
-socket!.emit('track_order', {'orderId': orderId});
-print('📤 Tracking order: $orderId at ${DateTime.now().toIso8601String()}');
-} else {
-print('⚠️ Socket not connected or not initialized, cannot track order: $orderId at ${DateTime.now().toIso8601String()}');
-}
-}
+      final maidInfo = <String, dynamic>{
+        'maidName': orderData['maidName'] ?? 'Unknown Maid',
+        'maidPhone': orderData['maidPhone'] ?? '',
+        'maidEmail': orderData['maidEmail'] ?? '',
+        'maidLat': maidLat,
+        'maidLng': maidLng,
+        'status': orderData['status'] ?? 'Started',
+      };
 
-@override
-void dispose() {
-_isDisposed = true;
-if (socket != null && socket!.connected) {
-socket!.disconnect();
-}
-super.dispose();
-print('🗑️ SocketController disposed at ${DateTime.now().toIso8601String()}');
-}
+      print('📡 Received from socket: $maidInfo');
+
+      // Update live orders
+      updateOrderLiveStatus(orderId, true);
+
+      // Call global callback
+      if (onMaidStartedOrder != null) {
+        onMaidStartedOrder!(orderId, maidInfo);
+      }
+
+      // Update OrderController with full maid info
+      if (orderController != null) {
+        orderController!.updateOrderStatusFromSocket(
+          orderId,
+          maidInfo['status'].toString(),
+          maidLat,
+          maidLng,
+          maidName: maidInfo['maidName'],
+          maidPhone: maidInfo['maidPhone'],
+          maidEmail: maidInfo['maidEmail'],
+        );
+      }
+
+      // Persist maid info globally
+      await _persistMaidInfo(orderId, maidInfo);
+    });
+  }
+
+  double _parseDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
+  void _reconnect() {
+    if (_reconnectionAttempts < _maxReconnectionAttempts) {
+      _reconnectionAttempts++;
+      Future.delayed(const Duration(seconds: 2), () => connect());
+    } else {
+      print('⚠️ Max reconnection attempts reached');
+    }
+  }
+
+  Future<void> sendOrderNotification(Map<String, dynamic> payload) async {
+    if (!_isConnected) {
+      _pendingMessages.add(payload);
+      return;
+    }
+    socket?.emit('chat message', payload);
+  }
+
+  void updateOrderLiveStatus(String orderId, bool isLive) {
+    if (isLive) {
+      _liveOrders.add(orderId);
+    } else {
+      _liveOrders.remove(orderId);
+    }
+    notifyListeners();
+  }
+
+  void trackOrder(String orderId) => updateOrderLiveStatus(orderId, true);
+  void stopTracking(String orderId) => updateOrderLiveStatus(orderId, false);
+
+  /// Persist maid info for each order using SharedPreferences
+  Future<void> _persistMaidInfo(String orderId, Map<String, dynamic> maidInfo) async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = prefs.getString('maid_info') ?? '{}';
+    final Map<String, dynamic> map = jsonDecode(data);
+    map[orderId] = maidInfo;
+    await prefs.setString('maid_info', jsonEncode(map));
+    debugPrint('💾 Maid info saved for order $orderId: $maidInfo');
+  }
+
+  /// Load persisted maid info and update OrderController
+  Future<void> _loadPersistedMaidInfo() async {
+    if (orderController == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final data = prefs.getString('maid_info') ?? '{}';
+    final Map<String, dynamic> map = jsonDecode(data);
+
+    map.forEach((orderId, maidInfo) {
+      final lat = maidInfo['maidLat'] ?? 0.0;
+      final lng = maidInfo['maidLng'] ?? 0.0;
+      orderController!.updateOrderStatusFromSocket(
+        orderId,
+        maidInfo['status'].toString(),
+        lat,
+        lng,
+        maidName: maidInfo['maidName'],
+        maidPhone: maidInfo['maidPhone'],
+        maidEmail: maidInfo['maidEmail'],
+      );
+    });
+
+    debugPrint('📌 Restored maid info from SharedPreferences: $map');
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    socket?.disconnect();
+    super.dispose();
+  }
 }

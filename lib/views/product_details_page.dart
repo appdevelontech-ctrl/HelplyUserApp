@@ -537,11 +537,379 @@ class ProductDetailsPage extends StatelessWidget {
                       ),
                       ElevatedButton(
                         onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Book Now clicked'),
-                              duration: Duration(seconds: 2),
-                            ),
+                          if (cartProvider.cartItems.isNotEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Already added a product. Please complete that order first.',
+                                ),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                            return;
+                          }
+                          showDialog(
+                            context: context,
+                            builder: (BuildContext context) {
+                              DateTime now = DateTime.now();
+                              List<DateTime> dateList = List.generate(
+                                11,
+                                    (i) => now.add(Duration(days: i)),
+                              );
+                              DateTime? selectedDate = dateList[0];
+                              DateTime? selectedTime;
+                              String selectedDuration =
+                              slug == 'multiday-service'
+                                  ? 'FullDay'
+                                  : '30min';
+                              double calculatedPrice = product.salePrice;
+
+                              List<DateTime> generateTimesForDate(
+                                  DateTime date,
+                                  ) {
+                                bool isToday =
+                                    date.year == now.year &&
+                                        date.month == now.month &&
+                                        date.day == now.day;
+                                DateTime start = isToday
+                                    ? now.add(
+                                  Duration(
+                                    minutes: 30 - (now.minute % 30),
+                                  ),
+                                )
+                                    : DateTime(
+                                  date.year,
+                                  date.month,
+                                  date.day,
+                                  8,
+                                  0,
+                                );
+                                DateTime end = DateTime(
+                                  date.year,
+                                  date.month,
+                                  date.day,
+                                  22,
+                                  0,
+                                );
+                                if (start.isAfter(end))
+                                  start = DateTime(
+                                    date.year,
+                                    date.month,
+                                    date.day,
+                                    8,
+                                    0,
+                                  );
+
+                                List<DateTime> times = [];
+                                DateTime current = start;
+                                while (current.isBefore(end) ||
+                                    current.isAtSameMomentAs(end)) {
+                                  times.add(current);
+                                  current = current.add(
+                                    const Duration(minutes: 30),
+                                  );
+                                }
+                                return times;
+                              }
+
+                              int getMinutesFromHour(String hour) {
+                                if (hour == '30min') return 30;
+                                return int.parse(
+                                  hour.substring(0, hour.length - 2),
+                                ) *
+                                    60;
+                              }
+
+                              void updatePrice() {
+                                if (slug == 'multiday-service') {
+                                  if (selectedDuration == 'FullDay') {
+                                    calculatedPrice = product.salePrice;
+                                  } else {
+                                    int days = int.parse(
+                                      selectedDuration.replaceAll('days', ''),
+                                    );
+                                    calculatedPrice = product.salePrice * days;
+                                  }
+                                } else {
+                                  int minutes = getMinutesFromHour(
+                                    selectedDuration,
+                                  );
+                                  if (minutes <= 30) {
+                                    calculatedPrice = product.salePrice;
+                                  } else {
+                                    calculatedPrice =
+                                        product.salePrice +
+                                            (minutes - 30) * product.minPrice;
+                                  }
+                                }
+                              }
+
+                              return StatefulBuilder(
+                                builder: (context, setState) {
+                                  return Dialog(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    insetPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 24,
+                                    ),
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        maxHeight:
+                                        MediaQuery.of(context).size.height *
+                                            0.85,
+                                        maxWidth:
+                                        MediaQuery.of(context).size.width *
+                                            0.95,
+                                      ),
+                                      child: SingleChildScrollView(
+                                        padding: const EdgeInsets.all(16.0),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'Choose Date & Time',
+                                              style: TextStyle(
+                                                fontSize: 20,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 16),
+                                            const Text(
+                                              'Select Date',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Wrap(
+                                              spacing: 8,
+                                              runSpacing: 8,
+                                              children: dateList.map((date) {
+                                                String dateStr = DateFormat(
+                                                  'EEE, d MMM',
+                                                ).format(date);
+                                                return ChoiceChip(
+                                                  label: Text(dateStr),
+                                                  selected:
+                                                  selectedDate == date,
+                                                  onSelected: (bool selected) {
+                                                    setState(() {
+                                                      selectedDate = date;
+                                                      selectedTime = null;
+                                                    });
+                                                  },
+                                                );
+                                              }).toList(),
+                                            ),
+                                            const SizedBox(height: 16),
+                                            const Text(
+                                              'Select Start Time',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            if (selectedDate != null)
+                                              Wrap(
+                                                spacing: 8,
+                                                runSpacing: 8,
+                                                children:
+                                                generateTimesForDate(
+                                                  selectedDate!,
+                                                ).map((time) {
+                                                  String timeStr =
+                                                  DateFormat(
+                                                    'h:mm a',
+                                                  ).format(time);
+                                                  return ChoiceChip(
+                                                    label: Text(timeStr),
+                                                    selected:
+                                                    selectedTime ==
+                                                        time,
+                                                    onSelected:
+                                                        (bool selected) {
+                                                      setState(() {
+                                                        selectedTime =
+                                                            time;
+                                                      });
+                                                    },
+                                                  );
+                                                }).toList(),
+                                              ),
+                                            const SizedBox(height: 16),
+                                            if (slug == 'multiday-service')
+                                              Column(
+                                                crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                                children: [
+                                                  const Text(
+                                                    'Select Service Days',
+                                                    style: TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                      FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  Wrap(
+                                                    spacing: 8,
+                                                    runSpacing: 8,
+                                                    children:
+                                                    [
+                                                      'FullDay',
+                                                      '2days',
+                                                      '3days',
+                                                      '4days',
+                                                      '5days',
+                                                      '6days',
+                                                    ].map((day) {
+                                                      return ChoiceChip(
+                                                        label: Text(day),
+                                                        selected:
+                                                        selectedDuration ==
+                                                            day,
+                                                        onSelected:
+                                                            (
+                                                            bool selected,
+                                                            ) {
+                                                          setState(() {
+                                                            selectedDuration =
+                                                                day;
+                                                            updatePrice();
+                                                          });
+                                                        },
+                                                      );
+                                                    }).toList(),
+                                                  ),
+                                                ],
+                                              )
+                                            else
+                                              Column(
+                                                crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                                children: [
+                                                  const Text(
+                                                    'Select Service Hours',
+                                                    style: TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                      FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  Wrap(
+                                                    spacing: 8,
+                                                    runSpacing: 8,
+                                                    children:
+                                                    [
+                                                      '30min',
+                                                      '1Hr',
+                                                      '2Hr',
+                                                      '3Hr',
+                                                      '4Hr',
+                                                      '5Hr',
+                                                      '6Hr',
+                                                    ].map((hour) {
+                                                      return ChoiceChip(
+                                                        label: Text(hour),
+                                                        selected:
+                                                        selectedDuration ==
+                                                            hour,
+                                                        onSelected:
+                                                            (
+                                                            bool selected,
+                                                            ) {
+                                                          setState(() {
+                                                            selectedDuration =
+                                                                hour;
+                                                            updatePrice();
+                                                          });
+                                                        },
+                                                      );
+                                                    }).toList(),
+                                                  ),
+                                                ],
+                                              ),
+                                            const SizedBox(height: 16),
+                                            Text(
+                                              'Approx Price: ₹${calculatedPrice.toStringAsFixed(0)}',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                color: Colors.green[800],
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 24),
+                                            Row(
+                                              mainAxisAlignment:
+                                              MainAxisAlignment.end,
+                                              children: [
+                                                TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(context),
+                                                  child: const Text('Cancel'),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                ElevatedButton(
+                                                  onPressed: () {
+                                                    if (selectedDate == null ||
+                                                        selectedTime == null ||
+                                                        selectedDuration
+                                                            .isEmpty)
+                                                      return;
+
+                                                    final cartProduct = product
+                                                        .toProduct(
+                                                      selectedDate:
+                                                      selectedDate,
+                                                      selectedTime:
+                                                      selectedTime,
+                                                      selectedDuration:
+                                                      selectedDuration,
+                                                      salePrice:
+                                                      calculatedPrice,
+                                                    );
+
+                                                    cartProvider
+                                                        .addToCart(cartProduct)
+                                                        .then((_) {
+                                                      Navigator.pop(
+                                                        context,
+                                                      );
+                                                      ScaffoldMessenger.of(
+                                                        context,
+                                                      ).showSnackBar(
+                                                        const SnackBar(
+                                                          content: Text(
+                                                            'Product added to cart',
+                                                          ),
+                                                          duration:
+                                                          Duration(
+                                                            seconds: 2,
+                                                          ),
+                                                        ),
+                                                      );
+                                                    });
+                                                  },
+                                                  child: const Text(
+                                                    'Add to Cart',
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              );
+                            },
                           );
                         },
                         style: ElevatedButton.styleFrom(

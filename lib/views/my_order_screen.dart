@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../controllers/order_controller.dart';
 import '../models/order_model.dart';
 import '../services/api_services.dart';
@@ -9,6 +10,8 @@ import 'package:shimmer/shimmer.dart';
 import '../controllers/socket_controller.dart';
 import 'live_tracking_page.dart';
 import 'order_detail_page.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class UserOrdersPage extends StatefulWidget {
   const UserOrdersPage({super.key});
@@ -17,91 +20,301 @@ class UserOrdersPage extends StatefulWidget {
   State<UserOrdersPage> createState() => _UserOrdersPageState();
 }
 
-class _UserOrdersPageState extends State<UserOrdersPage> {
+class _UserOrdersPageState extends State<UserOrdersPage> with TickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  Map<String, Map<String, dynamic>> _maidInfoMap = {};
+
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    );
+    _animationController.forward();
+
     print('🚀 UserOrdersPage initialized');
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      final socketController = Provider.of<SocketController>(context, listen: false);
+      final orderController = Provider.of<OrderController>(context, listen: false);
+      socketController.attachOrderController(orderController);
+      socketController.connect();
+
+      _fetchOrdersAndMerge();
+    });
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchOrdersAndMerge() async {
+    await _loadMaidInfo();
+
+    final orderController = context.read<OrderController>();
+    try {
+      await orderController.fetchOrders();
+      _mergeSavedMaidInfo(orderController.orders);
+      orderController.notifyListeners();
+      if (mounted) setState(() {});
+    } catch (e) {
       if (mounted) {
-        try {
-          context.read<OrderController>().fetchOrders();
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Failed to load orders: $e'),
-                duration: const Duration(seconds: 3),
-              ),
-            );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load orders: $e'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _cancelOrderWithComment(String orderId, String comment) async {
+    try {
+      final response = await http.put(
+        Uri.parse('https://backend-olxs.onrender.com/cancel-order/$orderId'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({"comment": comment}),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          final prefs = await SharedPreferences.getInstance();
+          final savedData = prefs.getString('maid_info') ?? '{}';
+          final Map<String, dynamic> map = jsonDecode(savedData);
+          map.remove(orderId);
+          await prefs.setString('maid_info', jsonEncode(map));
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Order cancelled successfully')),
+          );
+          await _fetchOrdersAndMerge();
+        } else {
+          throw Exception('Failed to cancel order: ${data['message']}');
+        }
+      } else {
+        throw Exception('Failed to cancel order: ${response.statusCode}');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error cancelling order: $e')),
+      );
+    }
+  }
+
+  void _mergeSavedMaidInfo(List<Order> orders) {
+    for (var i = 0; i < orders.length; i++) {
+      final orderIdStr = orders[i].id;
+      Order updatedOrder = orders[i];
+
+      if (_maidInfoMap.containsKey(orderIdStr)) {
+        final info = _maidInfoMap[orderIdStr]!;
+        final savedUpdatedAt = info['updatedAt'] as String?;
+        final serverUpdatedAt = updatedOrder.updatedAt;
+        bool shouldUpdateStatus = false;
+
+        if (savedUpdatedAt != null && serverUpdatedAt != null) {
+          final savedDate = DateTime.tryParse(savedUpdatedAt);
+          final serverDate = DateTime.tryParse(serverUpdatedAt);
+          if (savedDate != null && serverDate != null && savedDate.isAfter(serverDate)) {
+            shouldUpdateStatus = true;
           }
         }
+
+        updatedOrder = updatedOrder.copyWith(
+          maidName: info['maidName'] ?? updatedOrder.maidName,
+          maidPhone: info['maidPhone'] ?? updatedOrder.maidPhone,
+          maidEmail: info['maidEmail'] ?? updatedOrder.maidEmail,
+          status: shouldUpdateStatus ? _statusCodeFromServer(info['status']) : updatedOrder.status,
+          maidLat: (info['maidLat'] as num?)?.toDouble() ?? updatedOrder.maidLat,
+          maidLng: (info['maidLng'] as num?)?.toDouble() ?? updatedOrder.maidLng,
+        );
       }
-    });
+
+      orders[i] = updatedOrder;
+    }
+
+    if (mounted) setState(() {});
+  }
+
+  int _statusCodeFromServer(dynamic status) {
+    if (status is int) {
+      if ([0, 1, 2, 5, 7].contains(status)) return status;
+      print('⚠️ Invalid integer status received: $status, defaulting to 1 (Placed)');
+      return 1;
+    }
+    if (status is String) {
+      switch (status.toLowerCase()) {
+        case 'cancel': case 'cancelled': case 'canceled': return 0;
+        case 'placed': return 1;
+        case 'accept': case 'accepted': return 2;
+        case 'started': return 5;
+        case 'complete': case 'completed': return 7;
+        default:
+          print('⚠️ Unrecognized status string: $status, defaulting to 1 (Placed)');
+          return 1;
+      }
+    }
+    print('⚠️ Invalid status type: $status, defaulting to 1 (Placed)');
+    return 1;
+  }
+
+  Future<void> _loadMaidInfo() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedData = prefs.getString('maid_info');
+    if (savedData != null) {
+      try {
+        final decoded = jsonDecode(savedData) as Map<String, dynamic>;
+        _maidInfoMap = decoded.map((key, value) => MapEntry(key, value));
+        setState(() {});
+        print("👩‍🧹 Loaded maid_info from prefs: $savedData");
+        print("👩‍🧹 Parsed _maidInfoMap keys: ${_maidInfoMap.keys.toList()}");
+        _maidInfoMap.forEach((orderId, info) {
+          print("👩‍🧹 Maid details for $orderId: ${info.toString()}");
+        });
+      } catch (e) {
+        print("❌ Error parsing maid_info: $e");
+      }
+    } else {
+      print("👩‍🧹 No maid_info found in prefs");
+    }
+  }
+
+  void _showCancelDialog(Order order) {
+    final TextEditingController commentController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Cancel Order"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Please provide a reason for cancellation:"),
+            const SizedBox(height: 12),
+            TextField(
+              controller: commentController,
+              decoration: const InputDecoration(
+                hintText: "Enter comment",
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final comment = commentController.text.trim();
+              if (comment.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Comment cannot be empty")),
+                );
+                return;
+              }
+              Navigator.pop(context);
+              _cancelOrderWithComment(order.id, comment);
+            },
+            child: const Text("Confirm"),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return ScaffoldMessenger(
       child: Scaffold(
-        appBar: AppBar(
-          title: const Text(
-            "My Orders",
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 20,
-              color: Colors.black87,
+        extendBodyBehindAppBar: true,
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Colors.white, Color(0xFFF8F9FA)],
             ),
           ),
-          backgroundColor: Colors.white,
-          elevation: 0,
-          centerTitle: true,
-        ),
-        body: RefreshIndicator(
-          onRefresh: () async {
-            try {
-              await context.read<OrderController>().fetchOrders();
-            } catch (e) {
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Failed to refresh orders: $e'),
-                    duration: const Duration(seconds: 3),
-                  ),
-                );
-              }
-              return Future.error(e);
-            }
-          },
-          color: Colors.orangeAccent,
-          child: Consumer<OrderController>(
-            builder: (context, controller, child) {
-              if (controller.loading) {
-                return _buildShimmerLoader();
-              } else if (controller.orders.isEmpty) {
-                return const Center(
-                  child: Text(
-                    "No orders found.",
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.w500,
+          child: RefreshIndicator(
+            onRefresh: _fetchOrdersAndMerge,
+            color: Colors.orangeAccent,
+            child: Consumer<OrderController>(
+              builder: (context, controller, child) {
+                if (controller.loading) return _buildShimmerLoader();
+                if (controller.orders.isEmpty) {
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.shopping_bag_outlined, size: 80, color: Colors.grey),
+                        SizedBox(height: 16),
+                        Text(
+                          "No orders found.",
+                          style: TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.w500),
+                        ),
+                      ],
                     ),
-                  ),
-                );
-              } else {
+                  );
+                }
+
                 final sortedOrders = List<Order>.from(controller.orders)
                   ..sort((a, b) => b.orderId.compareTo(a.orderId));
-                return ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: sortedOrders.length,
-                  itemBuilder: (context, index) {
-                    final order = sortedOrders[index];
-                    return _buildOrderCard(context, order, controller);
-                  },
+
+                return CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: FadeTransition(
+                          opacity: _fadeAnimation,
+                          child: Column(
+                            children: [
+                              Text(
+                                'Your Recent Orders',
+                                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                          Order order = sortedOrders[index];
+                          return FadeTransition(
+                            opacity: Tween<double>(begin: 0.0, end: 1.0).animate(
+                              CurvedAnimation(
+                                parent: _animationController,
+                                curve: Interval(0.0, 1.0, curve: Curves.easeOut),
+                              ),
+                            ),
+                            child: _buildOrderCard(context, order, controller),
+                          );
+                        },
+                        childCount: sortedOrders.length,
+                      ),
+                    ),
+                  ],
                 );
-              }
-            },
+              },
+            ),
           ),
         ),
       ),
@@ -117,8 +330,7 @@ class _UserOrdersPageState extends State<UserOrdersPage> {
         itemCount: 5,
         itemBuilder: (context, index) => Card(
           margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           elevation: 4,
           child: ListTile(
             contentPadding: const EdgeInsets.all(16),
@@ -141,170 +353,224 @@ class _UserOrdersPageState extends State<UserOrdersPage> {
     );
   }
 
-  Widget _buildOrderCard(
-      BuildContext context, Order order, OrderController controller) {
+  Widget _buildOrderCard(BuildContext context, Order order, OrderController controller) {
     final paymentService = PaymentService(context, ApiServices());
-    final socketController =
-        Provider.of<SocketController>(context, listen: false);
+    final socketController = Provider.of<SocketController>(context, listen: false);
 
-    return GestureDetector(
+    return InkWell(
       onTap: () {
-        debugPrint("Tapped on order ID: ${order.orderId}, _id: ${order.id}");
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => OrderDetailsPage(
+            builder: (_) => OrderDetailsPage(
               orderId: order.id,
               orderController: controller,
             ),
           ),
         );
       },
-      child: Card(
+      child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Colors.grey, width: 0.5),
+        child: Card(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Colors.orangeAccent, width: 0.5),
+          ),
+          elevation: 8,
+          shadowColor: Colors.orangeAccent.withOpacity(0.3),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: LinearGradient(
+                colors: [Colors.white, Colors.grey[50]!],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildOrderHeader(order),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (order.status != 7 && order.status != 0)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: ElevatedButton.icon(
+                            onPressed: () => _showCancelDialog(order),
+                            icon: const Icon(Icons.cancel, color: Colors.white),
+                            label: const Text("Cancel Order", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.redAccent,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            ),
+                          ),
+                        ),
+                      if (order.status == 7)
+                        _buildPayButton(order, paymentService),
+                      if (order.status == 5 && order.maidLat != null && order.maidLng != null)
+                        _buildLiveTrackButton(order, socketController, order),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
-        elevation: 4,
-        shadowColor: Colors.black12,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      ),
+    );
+  }
+
+  Widget _buildOrderHeader(Order order) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: Colors.orangeAccent,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            Icons.shopping_bag,
+            color: Colors.white,
+            size: 24,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  CircleAvatar(
-                    backgroundColor: Colors.orangeAccent,
-                    radius: 24,
-                    child: Text(
-                      order.orderId.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Order #${order.orderId}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87),
                       ),
-                    ),
+                      Text(
+                        "₹${order.totalAmount.toStringAsFixed(2)}",
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.orangeAccent),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              "₹${order.totalAmount.toStringAsFixed(2)}",
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            _buildStatusChip(order.status),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          "Payment: ${order.mode}",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[700],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        if (order.otp != null) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            "OTP: ${order.otp}",
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[700],
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 4),
-                        Text(
-                          "Date: ${DateFormat('dd MMM yyyy, hh:mm a').format(order.createdAt)}",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(
-                    Icons.arrow_forward_ios,
-                    size: 16,
-                    color: Colors.grey[600],
+                  _buildStatusChip(order.status),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(Icons.payment, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    "Payment: ${order.mode}",
+                    style: TextStyle(fontSize: 14, color: Colors.grey[700], fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              if (order.status == 7)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: ElevatedButton(
-                    onPressed: (order.payment == 1)
-                        ? null
-                        : () {
-                            print(
-                                '🚀 Pay clicked for order ID: ${order.orderId}, _id: ${order.id}');
-                            paymentService.initiatePayment(order);
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          (order.payment == 1) ? Colors.grey : Colors.green,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+              if (order.otp != null) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.lock_outline, size: 16, color: Colors.grey[600]),
+                    const SizedBox(width: 4),
+                    Text(
+                      "OTP: ${order.otp}",
+                      style: TextStyle(fontSize: 14, color: Colors.grey[700], fontWeight: FontWeight.w500),
                     ),
-                    child: Text(
-                      (order.payment == 1) ? "Paid" : "Pay Now",
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
+                  ],
                 ),
-              if (order.status != 5 &&
-                  (order.maidLat != null || order.maidLng != null))
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      print(
-                          '🚀 Live Track clicked for order ID: ${order.orderId}, _id: ${order.id}');
-                      socketController.trackOrder(order.id);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              LiveTrackingPage(orderId: order.id),
-                        ),
-                      ).then((value) {
-// Optional: Handle return from LiveTrackingPage if needed
-                      });
-                    },
-                    icon: const Icon(Icons.location_on),
-                    label: const Text("Live Track"),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
+              ],
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    "Date: ${DateFormat('dd MMM yyyy, hh:mm a').format(order.createdAt)}",
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600], fontStyle: FontStyle.italic),
                   ),
-                ),
+                ],
+              ),
             ],
           ),
+        ),
+        Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[600]),
+      ],
+    );
+  }
+
+  Widget _buildPayButton(Order order, PaymentService paymentService) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: ElevatedButton.icon(
+        onPressed: (order.payment == 1) ? null : () => paymentService.initiatePayment(order),
+        icon: Icon((order.payment == 1) ? Icons.check : Icons.payment),
+        label: Text((order.payment == 1) ? "Paid" : "Pay Now", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: (order.payment == 1) ? Colors.green : Colors.orangeAccent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLiveTrackButton(Order order, SocketController socketController, Order currentOrder) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: ElevatedButton.icon(
+        onPressed: () => _onLiveTrackPressed(currentOrder, socketController),
+        icon: const Icon(Icons.location_on, color: Colors.white),
+        label: const Text("Live Track", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.blueAccent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        ),
+      ),
+    );
+  }
+
+  void _onLiveTrackPressed(Order order, SocketController socketController) {
+    final maidLat = order.maidLat ?? 0.0;
+    final maidLng = order.maidLng ?? 0.0;
+    final maidName = order.maidName ?? 'Unknown';
+    final maidPhone = order.maidPhone ?? '';
+    final maidEmail = order.maidEmail ?? '';
+
+    print('➡️ Maid info for ${order.id} (orderId: ${order.orderId}): $maidName, $maidPhone, $maidEmail');
+    print('➡️ Maid coords for ${order.id} (orderId: ${order.orderId}): $maidLat, $maidLng');
+
+    if (maidLat == 0.0 && maidLng == 0.0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Maid location not yet available. Please wait.')),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LiveTrackingPage(
+          orderId: order.id,
+          maidLat: maidLat,
+          maidLng: maidLng,
+          userLat: order.userLat ?? 0.0,
+          userLng: order.userLng ?? 0.0,
+          maidName: maidName,
+          maidPhone: maidPhone,
+          maidEmail: maidEmail,
+          orderStatus: order.status,
         ),
       ),
     );
@@ -312,58 +578,76 @@ class _UserOrdersPageState extends State<UserOrdersPage> {
 
   Widget _buildStatusChip(int status) {
     String statusText = _statusText(status);
+    IconData icon;
     Color chipColor;
+    Color iconColor = Colors.white;
+
     switch (status) {
       case 0:
-        chipColor = Colors.orange.shade100;
+        chipColor = Colors.red.shade100;
+        icon = Icons.cancel_outlined;
+        iconColor = Colors.red.shade700;
         break;
       case 1:
-        chipColor = Colors.blue.shade100;
+        chipColor = Colors.orange.shade100;
+        icon = Icons.pending_outlined;
+        iconColor = Colors.orange.shade700;
         break;
       case 2:
         chipColor = Colors.purple.shade100;
+        icon = Icons.check_circle_outline;
+        iconColor = Colors.purple.shade700;
         break;
       case 5:
-        chipColor = Colors.red.shade100;
+        chipColor = Colors.blue.shade100;
+        icon = Icons.location_on_outlined;
+        iconColor = Colors.blue.shade700;
         break;
       case 7:
         chipColor = Colors.green.shade100;
+        icon = Icons.verified;
+        iconColor = Colors.green.shade700;
         break;
       default:
         chipColor = Colors.grey.shade100;
+        icon = Icons.help_outline;
+        iconColor = Colors.grey.shade700;
+        print('⚠️ Invalid status code: $status, displaying as Unknown');
     }
 
-    return Chip(
-      label: Text(
-        statusText,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: chipColor.computeLuminance() > 0.5
-              ? Colors.black87
-              : Colors.white,
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: chipColor,
+        borderRadius: BorderRadius.circular(20),
+        border: status == 7 ? Border.all(color: Colors.green.shade700, width: 1.5) : null,
       ),
-      backgroundColor: chipColor,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: status == 7 ? 18 : 16, color: iconColor),
+          const SizedBox(width: 4),
+          Text(
+            statusText,
+            style: TextStyle(
+              fontSize: status == 7 ? 14 : 12,
+              fontWeight: FontWeight.w700,
+              color: iconColor,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   String _statusText(int status) {
     switch (status) {
-      case 0:
-        return "Pending";
-      case 1:
-        return "Confirmed";
-      case 2:
-        return "Processing";
-      case 5:
-        return "Cancelled";
-      case 7:
-        return "Delivered";
-      default:
-        return "Unknown";
+      case 0: return "Cancelled";
+      case 1: return "Placed";
+      case 2: return "Accepted";
+      case 5: return "Started";
+      case 7: return "Completed";
+      default: return "Unknown";
     }
   }
 }

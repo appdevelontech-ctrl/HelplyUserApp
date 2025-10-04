@@ -15,46 +15,109 @@ class UserController extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   String? _hashOtp;
+  bool _isNewUser = false; // New flag to track if user is new
+  String? _phone; // Store phone number for signup
+  String? _gToken; // Store Gtoken for signup
+  bool _passwordRequired = false;
   final ApiServices _apiServices = ApiServices();
 
   AppUser? get user => _user;
   bool get isLoggedIn => _isLoggedIn;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  bool get passwordRequired => _passwordRequired;
 
-  // Setter for errorMessage
   set errorMessage(String? value) {
     _errorMessage = value;
     notifyListeners();
   }
-
   Future<void> loginWithPhone(String phone, BuildContext context) async {
     _isLoading = true;
     _errorMessage = null;
+    _passwordRequired = false;
+    _isNewUser = false;
+    _hashOtp = null;
     notifyListeners();
 
     try {
       final result = await _apiServices.loginWithOtp(phone);
       print("✅ loginWithOtp result: $result");
 
+      _phone = phone;
       _hashOtp = result['hashotp'];
+      _isNewUser = result['newUser'] ?? false;
+      _gToken = 'sddwdwdwdd';
+      _passwordRequired = result['passwordRequired'] ?? false;
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('phone', phone);
+      await prefs.setBool('isNewUser', _isNewUser);
+      await prefs.setBool('passwordRequired', _passwordRequired);
 
       if (result['user'] != null) {
-        final prefs = await SharedPreferences.getInstance();
         await prefs.setString('userId', result['user']['_id'] ?? '');
-        await prefs.setString('phone', result['user']['phone'] ?? '');
-        await prefs.setString('hashOtp', _hashOtp ?? '');
-
         print("💾 User ID saved: ${prefs.getString('userId')}");
-        print("💾 Phone saved: ${prefs.getString('phone')}");
+      }
+
+      if (_hashOtp != null) {
+        await prefs.setString('hashOtp', _hashOtp!);
         print("💾 Hashed OTP saved: ${prefs.getString('hashOtp')}");
+        _isLoading = false;
+        notifyListeners();
+
+        print("📌 OTP for testing: ${result['plainOtp']}");
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => OtpScreen(phone: phone)),
+        );
+      } else if (_passwordRequired) {
+        _isLoading = false;
+        notifyListeners();
+      } else {
+        throw Exception('No OTP received. Please try again or contact support.');
+      }
+    } catch (e) {
+      _isLoading = false;
+      // Extract the clean API message
+      String errorMsg = e.toString();
+      // Remove all "Exception: " prefixes iteratively
+      while (errorMsg.startsWith('Exception: ')) {
+        errorMsg = errorMsg.replaceFirst('Exception: ', '');
+      }
+      _errorMessage = errorMsg; // Set the clean message
+      // Clear SharedPreferences to prevent login with stale data
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+      _isLoggedIn = false;
+      notifyListeners();
+      print('❌ loginWithPhone error: $e');
+    }
+  }
+  Future<void> sendOtpForPasswordUser(String phone, BuildContext context) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final result = await _apiServices.sendOtpForPasswordUser(phone);
+      print("✅ sendOtpForPasswordUser result: $result");
+
+      _phone = phone;
+      _hashOtp = result['hashotp'];
+      _gToken = result['token'] ?? 'sddwdwdwdd';
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('phone', phone);
+      await prefs.setString('hashOtp', _hashOtp!);
+      if (result['user'] != null) {
+        await prefs.setString('userId', result['user']['_id'] ?? '');
+        print("💾 User ID saved: ${prefs.getString('userId')}");
       }
 
       _isLoading = false;
       notifyListeners();
 
       print("📌 OTP for testing: ${result['plainOtp']}");
-
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => OtpScreen(phone: phone)),
@@ -63,18 +126,55 @@ class UserController extends ChangeNotifier {
       _isLoading = false;
       _errorMessage = e.toString().replaceFirst('Exception: ', '');
       notifyListeners();
-      print('❌ loginWithPhone error: $e');
+      print('❌ sendOtpForPasswordUser error: $e');
     }
   }
+  Future<void> loginWithPassword(String phone, String password, BuildContext context) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
 
-  Future<void> verifyOtp(String otp, BuildContext context) async {
-    if (_hashOtp == null) {
-      final prefs = await SharedPreferences.getInstance();
-      _hashOtp = prefs.getString('hashOtp');
+    try {
+      final result = await _apiServices.loginWithPassword(phone, password);
+      print("✅ loginWithPassword result: $result");
+
+      if (result['success'] == true && result['user'] != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('userId', result['user']['_id'] ?? '');
+        await prefs.setString('phone', phone);
+        await prefs.setString('token', result['token'] ?? '');
+        await prefs.setBool('isLoggedIn', true);
+
+        await fetchUserDetails(result['user']['_id']);
+        _isLoggedIn = true;
+        _isLoading = false;
+        notifyListeners();
+
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const MainScreen()),
+              (Route<dynamic> route) => false, // removes all previous routes
+        );
+
+      } else {
+        throw Exception(result['message'] ?? 'Invalid credentials');
+      }
+    } catch (e) {
+      _isLoading = false;
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      notifyListeners();
+      print('❌ loginWithPassword error: $e');
     }
+  }
+  Future<void> verifyOtp(String otp, BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    _hashOtp ??= prefs.getString('hashOtp');
+    _isNewUser = prefs.getBool('isNewUser') ?? false;
+    _phone ??= prefs.getString('phone');
 
-    if (_hashOtp == null) {
-      _errorMessage = "OTP not generated. Please resend OTP.";
+    if (_hashOtp == null || _phone == null) {
+      _isLoading = false;
+      _errorMessage = 'OTP or phone number not found. Please resend OTP.';
       notifyListeners();
       return;
     }
@@ -84,107 +184,108 @@ class UserController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final userJson = await _apiServices.verifyOtp(otp, _hashOtp!);
-      print("✅ verifyOtp response: $userJson");
+      final verifyResult = await _apiServices.verifyOtp(otp, _hashOtp!);
+      print("✅ verifyOtp response: $verifyResult");
 
-      if (userJson['success'] == true) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('isLoggedIn', true);
+      if (verifyResult['success'] == true) {
         final userId = prefs.getString('userId') ?? '';
 
-        if (userId.isNotEmpty) {
-          // Fetch user details before navigating
-          await fetchUserDetails(userId);
-          _isLoggedIn = true;
-          _isLoading = false;
-          notifyListeners();
+        if (_isNewUser) {
+          final signupResult = await _apiServices.signupNewUser(_phone!, _gToken!);
+          print("✅ signupNewUser response: $signupResult");
 
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const MainScreen()),
-          );
+          if (signupResult['success'] == true) {
+            final newUserId = signupResult['userId'];
+            final newPhone = signupResult['phone'];
+            if (newUserId == null || newPhone == null) {
+              throw Exception('User ID or phone number missing in signup response');
+            }
+            await prefs.setString('userId', newUserId);
+            await prefs.setString('phone', newPhone);
+            await prefs.setBool('isLoggedIn', true);
+
+            await fetchUserDetails(newUserId);
+            _isLoggedIn = true;
+            _isLoading = false;
+            notifyListeners();
+
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const MainScreen()),
+                  (Route<dynamic> route) => false, // removes all previous routes
+            );
+
+          } else {
+            throw Exception(signupResult['message'] ?? 'Failed to sign up user');
+          }
         } else {
-          throw Exception("User ID not found in SharedPreferences");
+          if (userId.isNotEmpty) {
+            await fetchUserDetails(userId);
+            await prefs.setBool('isLoggedIn', true);
+            _isLoggedIn = true;
+            _isLoading = false;
+            notifyListeners();
+
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const MainScreen()),
+            );
+          } else {
+            throw Exception('User ID not found in SharedPreferences');
+          }
         }
       } else {
-        throw Exception(userJson['message'] ?? "Invalid OTP");
+        throw Exception(verifyResult['message'] ?? 'Invalid OTP');
       }
     } catch (e) {
       _isLoading = false;
       _errorMessage = e.toString().replaceFirst('Exception: ', '');
       notifyListeners();
-      print("❌ verifyOtp error: $e");
+      print('❌ verifyOtp error: $e');
     }
   }
-
   Future<void> fetchUserDetails(String userId) async {
     try {
-      final response = await http.post(
-        Uri.parse('${ApiServices.baseUrl}/auth-user'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'id': userId,
-        }),
-      );
-
+      final response = await _apiServices.getUser(userId);
       print('📩 Fetching user details for userId: $userId');
-      print('📩 Status: ${response.statusCode}');
-      print('📩 Body: ${response.body}');
+      print('📩 Body: ${response['body'] ?? 'No response body'}');
 
-      if (response.statusCode == 200) {
-        final jsonData = jsonDecode(response.body);
-        if (jsonData['success'] == true && jsonData['existingUser'] != null) {
-          _user = AppUser.fromJson(jsonData['existingUser']);
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('username', _user!.username ?? '');
-          await prefs.setString('email', _user!.email ?? '');
-          await prefs.setString('phone', _user!.phone);
-          await prefs.setString('address', _user!.address ?? '');
-          await prefs.setString('state', _user!.state ?? '');
-          await prefs.setString('pincode', _user!.pincode ?? '');
-          await prefs.setString('statename', _user!.statename ?? '');
-          await prefs.setString('country', _user!.country ?? '');
-          await prefs.setString('city', _user!.city ?? '');
-          await prefs.setString('about', _user!.about ?? '');
-          await prefs.setString('gender', _user!.gender ?? '1');
-          await prefs.setString('dob', _user!.dob ?? '');
-          await prefs.setString('doc1', _user!.doc1 ?? '');
-          await prefs.setString('doc2', _user!.doc2 ?? '');
-          await prefs.setString('doc3', _user!.doc3 ?? '');
-          await prefs.setString('pHealthHistory', _user!.pHealthHistory ?? '');
-          await prefs.setString('cHealthStatus', _user!.cHealthStatus ?? '');
-          await prefs.setStringList('department', _user!.department ?? []);
-          await prefs.setStringList('coverage', _user!.coverage ?? []);
-          await prefs.setInt('empType', _user!.empType ?? 0);
-          await prefs.setInt('verified', _user!.verified ?? 0);
-          await prefs.setInt('wallet', _user!.wallet ?? 0);
-          await prefs.setInt('online', _user!.online ?? 0);
-          print("💾 User details updated in SharedPreferences:");
-          print("Username: ${prefs.getString('username')}");
-          print("Email: ${prefs.getString('email')}");
-          print("Phone: ${prefs.getString('phone')}");
-          print("Address: ${prefs.getString('address')}");
-          print("State: ${prefs.getString('state')}");
-          print("Pincode: ${prefs.getString('pincode')}");
-          print("Statename: ${prefs.getString('statename')}");
-          print("Country: ${prefs.getString('country')}");
-          print("City: ${prefs.getString('city')}");
-          print("About: ${prefs.getString('about')}");
-          print("Gender: ${prefs.getString('gender')}");
-          print("DOB: ${prefs.getString('dob')}");
-          notifyListeners();
-        } else {
-          throw Exception(jsonData['message'] ?? 'Failed to fetch user details');
-        }
+      if (response['success'] == true && response['user'] != null) {
+        _user = AppUser.fromJson(response['user']);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('username', _user!.username ?? '');
+        await prefs.setString('email', _user!.email ?? '');
+        await prefs.setString('phone', _user!.phone ?? '');
+        await prefs.setString('address', _user!.address ?? '');
+        await prefs.setString('state', _user!.state ?? '');
+        await prefs.setString('pincode', _user!.pincode ?? '');
+        await prefs.setString('statename', _user!.statename ?? '');
+        await prefs.setString('country', _user!.country ?? '');
+        await prefs.setString('city', _user!.city ?? '');
+        await prefs.setString('about', _user!.about ?? '');
+        await prefs.setString('gender', _user!.gender ?? '1');
+        await prefs.setString('dob', _user!.dob ?? '');
+        await prefs.setString('doc1', _user!.doc1 ?? '');
+        await prefs.setString('doc2', _user!.doc2 ?? '');
+        await prefs.setString('doc3', _user!.doc3 ?? '');
+        await prefs.setString('pHealthHistory', _user!.pHealthHistory ?? '');
+        await prefs.setString('cHealthStatus', _user!.cHealthStatus ?? '');
+        await prefs.setStringList('department', _user!.department ?? []);
+        await prefs.setStringList('coverage', _user!.coverage ?? []);
+        await prefs.setInt('empType', _user!.empType ?? 0);
+        await prefs.setInt('verified', _user!.verified ?? 0);
+        await prefs.setInt('wallet', _user!.wallet ?? 0);
+        await prefs.setInt('online', _user!.online ?? 0);
+        notifyListeners();
       } else {
-        throw Exception(
-            'Failed to fetch user details (Status code: ${response.statusCode})');
+        throw Exception(response['message'] ?? 'Failed to fetch user details');
       }
     } catch (e) {
       print('❌ Error fetching user details: $e');
       throw Exception('Error fetching user details: $e');
     }
   }
+
 
   Future<bool> updateUserDetails({
     required String userId,
@@ -263,6 +364,11 @@ class UserController extends ChangeNotifier {
       final headers = {
         'Content-Type': 'application/json',
       };
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
+      if (token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
 
       final response = await http.put(
         url,
@@ -313,37 +419,31 @@ class UserController extends ChangeNotifier {
             );
 
             // Save to SharedPreferences
-            try {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setString('username', username);
-              await prefs.setString('email', email);
-              await prefs.setString('phone', phone);
-              await prefs.setString('address', address);
-              await prefs.setString('state', state);
-              await prefs.setString('pincode', pincode);
-              await prefs.setString('statename', statename);
-              await prefs.setString('country', country);
-              await prefs.setString('city', city);
-              await prefs.setString('about', about);
-              await prefs.setString('gender', gender);
-              await prefs.setString('dob', dob);
-              await prefs.setString('doc1', finalDoc1 ?? '');
-              await prefs.setString('doc2', doc2 ?? _user?.doc2 ?? '');
-              await prefs.setString('doc3', doc3 ?? _user?.doc3 ?? '');
-              await prefs.setString('pHealthHistory', pHealthHistory ?? _user?.pHealthHistory ?? '');
-              await prefs.setString('cHealthStatus', cHealthStatus ?? _user?.cHealthStatus ?? '');
-              await prefs.setStringList('department', department ?? _user?.department ?? []);
-              await prefs.setStringList('coverage', coverage ?? _user?.coverage ?? []);
-              await prefs.setString('type', type);
-              await prefs.setInt('empType', empType ?? _user?.empType ?? 0);
-              await prefs.setInt('verified', verified ?? _user?.verified ?? 0);
-              await prefs.setInt('wallet', wallet ?? _user?.wallet ?? 0);
-              await prefs.setInt('online', online ?? _user?.online ?? 0);
-              print("💾 User details updated in SharedPreferences ✅");
-            } catch (e) {
-              print('❌ Error saving to SharedPreferences: $e');
-              throw Exception('Failed to save user details locally: $e');
-            }
+            await prefs.setString('username', username);
+            await prefs.setString('email', email);
+            await prefs.setString('phone', phone);
+            await prefs.setString('address', address);
+            await prefs.setString('state', state);
+            await prefs.setString('pincode', pincode);
+            await prefs.setString('statename', statename);
+            await prefs.setString('country', country);
+            await prefs.setString('city', city);
+            await prefs.setString('about', about);
+            await prefs.setString('gender', gender);
+            await prefs.setString('dob', dob);
+            await prefs.setString('doc1', finalDoc1 ?? '');
+            await prefs.setString('doc2', doc2 ?? _user?.doc2 ?? '');
+            await prefs.setString('doc3', doc3 ?? _user?.doc3 ?? '');
+            await prefs.setString('pHealthHistory', pHealthHistory ?? _user?.pHealthHistory ?? '');
+            await prefs.setString('cHealthStatus', cHealthStatus ?? _user?.cHealthStatus ?? '');
+            await prefs.setStringList('department', department ?? _user?.department ?? []);
+            await prefs.setStringList('coverage', coverage ?? _user?.coverage ?? []);
+            await prefs.setString('type', type);
+            await prefs.setInt('empType', empType ?? _user?.empType ?? 0);
+            await prefs.setInt('verified', verified ?? _user?.verified ?? 0);
+            await prefs.setInt('wallet', wallet ?? _user?.wallet ?? 0);
+            await prefs.setInt('online', online ?? _user?.online ?? 0);
+            print("💾 User details updated in SharedPreferences ✅");
 
             _isLoading = false;
             notifyListeners();
@@ -382,13 +482,23 @@ class UserController extends ChangeNotifier {
     if (isLoggedIn) {
       final userId = prefs.getString('userId') ?? '';
       if (userId.isNotEmpty) {
-        await fetchUserDetails(userId);
-        _isLoggedIn = true;
-        notifyListeners();
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const MainScreen()),
-        );
+        try {
+          await fetchUserDetails(userId);
+          _isLoggedIn = true;
+          notifyListeners();
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const MainScreen()),
+          );
+        } catch (e) {
+          _errorMessage = 'Failed to load user details. Please log in again.';
+          await logout();
+          notifyListeners();
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+          );
+        }
       } else {
         await logout();
         Navigator.pushReplacement(
@@ -403,18 +513,30 @@ class UserController extends ChangeNotifier {
       );
     }
   }
-
   Future<void> logout() async {
     print("🚪 Logging out user...");
     final prefs = await SharedPreferences.getInstance();
+
+    final currentUserId = prefs.getString('userId');
+
+    // ✅ Get current user's maid_info
+    final maidInfo = prefs.getString('maid_info_$currentUserId');
+
+    // Clear everything else
     await prefs.clear();
     print("💾 SharedPreferences cleared.");
 
+    // ✅ Restore only this user’s maid_info
+    if (maidInfo != null && maidInfo.isNotEmpty && currentUserId != null) {
+      await prefs.setString('maid_info_$currentUserId', maidInfo);
+      print("💾 maid_info preserved for userId: $currentUserId ✅");
+    }
+
     _user = null;
     _isLoggedIn = false;
-    _hashOtp = null;
     notifyListeners();
   }
+
 
   Future<void> deleteAccount(BuildContext context) async {
     _isLoading = true;
@@ -433,8 +555,13 @@ class UserController extends ChangeNotifier {
       print("✅ deleteAccount response: $response");
 
       if (response['success'] == true) {
+        await logout();
         _isLoading = false;
         notifyListeners();
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
       } else {
         throw Exception(response['message'] ?? 'Failed to delete account');
       }

@@ -6,9 +6,8 @@ import '../models/order_model.dart';
 import '../models/serviceCategoryDetail.dart';
 import '../models/service_category.dart';
 
-
 class ApiServices {
-  static final   String baseUrl = 'https://backend-olxs.onrender.com';
+  static final String baseUrl = 'https://backend-olxs.onrender.com';
 
   Future<LocationResponse> fetchLocations() async {
     try {
@@ -84,77 +83,6 @@ class ApiServices {
     }
   }
 
-  Future<Map<String, dynamic>> loginWithOtp(String phone) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/login-with-otp/'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'phone': phone, 'password': ''}),
-      );
-
-      print('📩 login-with-otp request with $phone');
-      print('📩 Status: ${response.statusCode}');
-      print('📩 Body: ${response.body}');
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final jsonData = jsonDecode(response.body);
-
-        if (jsonData['success'] == true) {
-          print('✅ loginWithOtp result: $jsonData');
-          print('💡 Plain OTP (newotp): ${jsonData['newotp']}');
-
-          return {
-            'success': true,
-            'hashotp': jsonData['otp'],
-            'plainOtp': jsonData['newotp'],
-            'message': jsonData['message'],
-            'token': jsonData['token'],
-            'user': jsonData['existingUser'],
-          };
-        } else {
-          throw Exception(jsonData['message'] ?? 'Failed to send OTP');
-        }
-      } else {
-        throw Exception('Failed to send OTP (Status code: ${response.statusCode})');
-      }
-    } catch (e) {
-      print('❌ loginWithPhone error: $e');
-      throw Exception('Error sending OTP: $e');
-    }
-  }
-
-  Future<Map<String, dynamic>> verifyOtp(String enteredOtp, String hashOtp) async {
-    try {
-      print('📲 verifyOtp() called with otp: $enteredOtp & hashOtp: $hashOtp');
-
-      final response = await http.post(
-        Uri.parse('$baseUrl/login-verify-otp'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'OTP': enteredOtp, 'HASHOTP': hashOtp}),
-      );
-
-      print('📩 verify-otp raw body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final jsonData = jsonDecode(response.body);
-
-        if (jsonData['success'] == true) {
-          return {
-            'success': true,
-            'user': jsonData['user'],
-          };
-        } else {
-          throw Exception(jsonData['message'] ?? 'Invalid OTP');
-        }
-      } else {
-        throw Exception('Failed to verify OTP (Status code: ${response.statusCode})');
-      }
-    } catch (e) {
-      print('❌ verifyOtp error: $e');
-      throw Exception('Error verifying OTP: $e');
-    }
-  }
-
   Future<List<Order>> fetchUserOrders() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -191,6 +119,7 @@ class ApiServices {
       throw Exception('Error fetching orders: $e');
     }
   }
+
   Future<Order> fetchOrderDetails(String userId, String orderId) async {
     try {
       print('📩 Fetching order details for userId: $userId, orderId: $orderId');
@@ -232,6 +161,7 @@ class ApiServices {
       throw Exception('Error fetching order details: $e');
     }
   }
+
   Future<Map<String, dynamic>> createOrder(String userId, Map<String, dynamic> orderData) async {
     try {
       final url = Uri.parse('$baseUrl/create-order/$userId');
@@ -266,7 +196,7 @@ class ApiServices {
       throw Exception('Error creating order: $e');
     }
   }
-  // 1️⃣ Create Payment Order
+
   Future<Map<String, dynamic>> createPaymentOrder(Map<String, dynamic> payload) async {
     final url = Uri.parse('$baseUrl/order-payment');
     final response = await http.post(url,
@@ -286,7 +216,6 @@ class ApiServices {
     }
   }
 
-  // 2️⃣ Verify Payment
   Future<Map<String, dynamic>> verifyPayment({
     required String razorpayOrderId,
     required String razorpayPaymentId,
@@ -321,10 +250,6 @@ class ApiServices {
     }
   }
 
-
-
-
-  // New method to fetch Privacy Policy
   Future<Map<String, dynamic>> fetchPrivacyPolicy() async {
     try {
       final response = await http.get(
@@ -355,9 +280,6 @@ class ApiServices {
     }
   }
 
-
-
-  // New method for deleting account
   Future<Map<String, dynamic>> deleteAccount(String userId) async {
     final response = await http.put(
       Uri.parse('$baseUrl/admin/update-user/$userId'),
@@ -376,7 +298,248 @@ class ApiServices {
     }
   }
 
+  Future<Map<String, dynamic>> getUser(String userId, {String? token}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final storedToken = token ?? prefs.getString('token') ?? '';
+
+      final headers = {
+        'Content-Type': 'application/json',
+      };
+      if (storedToken.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $storedToken';
+      }
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth-user'),
+        headers: headers,
+        body: jsonEncode({'id': userId}),
+      );
+
+      print('📩 getUser request for userId: $userId');
+      print('📩 Status: ${response.statusCode}');
+      print('📩 Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final jsonData = jsonDecode(response.body);
+        if (jsonData['success'] == true && jsonData['existingUser'] != null) {
+          return {
+            'success': true,
+            'user': jsonData['existingUser'],
+            'message': jsonData['message'] ?? 'User details fetched successfully',
+          };
+        } else {
+          throw Exception(jsonData['message'] ?? 'Failed to fetch user details');
+        }
+      } else {
+        throw Exception('Failed to fetch user details (Status code: ${response.statusCode})');
+      }
+    } catch (e) {
+      print('❌ getUser error: $e');
+      throw Exception('Error fetching user details: $e');
+    }
+  }
 
 
 
+  Future<Map<String, dynamic>> loginWithOtp(String phone, {bool retry = false}) async {
+    try {
+      final url = '$baseUrl/signup-login-otp/';
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'phone': phone,
+          'Gtoken': 'sddwdwdwdd',
+          'password': '',
+        }),
+      );
+
+      print('📩 signup-login-otp request with $phone');
+      print('📩 Status: ${response.statusCode}');
+      print('📩 Body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final jsonData = jsonDecode(response.body);
+
+        if (jsonData['success'] == true) {
+          print('✅ loginWithOtp result: $jsonData');
+          print('💡 Plain OTP (newotp): ${jsonData['newotp']}');
+
+          return {
+            'success': true,
+            'hashotp': jsonData['otp'],
+            'plainOtp': jsonData['newotp'],
+            'message': jsonData['message'],
+            'newUser': jsonData['newUser'] ?? false,
+            'user': jsonData['existingUser'],
+            'passwordRequired': jsonData['password'] ?? false,
+            'token': jsonData['token'],
+          };
+        } else {
+          throw Exception(jsonData['message'] ?? 'Failed to send OTP');
+        }
+      } else {
+        final jsonData = jsonDecode(response.body);
+        throw Exception(jsonData['message'] ?? 'Failed to send OTP (Status code: ${response.statusCode})');
+      }
+    } catch (e) {
+      print('❌ loginWithOtp error: $e');
+      throw Exception('$e'); // Ensure the full error message is passed
+    }
+  }
+  Future<Map<String, dynamic>> loginWithPassword(String phone, String password) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/login-with-pass'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'phone': phone,
+          'Gtoken': 'sddwdwdwdd',
+          'password': password,
+        }),
+      );
+
+      print('📩 login-with-pass request with $phone');
+      print('📩 Status: ${response.statusCode}');
+      print('📩 Body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final jsonData = jsonDecode(response.body);
+
+        if (jsonData['success'] == true) {
+          print('✅ loginWithPassword result: $jsonData');
+          return {
+            'success': true,
+            'message': jsonData['message'] ?? 'Login successful',
+            'user': jsonData['existingUser'],
+            'token': jsonData['token'],
+          };
+        } else {
+          throw Exception(jsonData['message'] ?? 'Invalid credentials');
+        }
+      } else {
+        throw Exception('Failed to login with password (Status code: ${response.statusCode})');
+      }
+    } catch (e) {
+      print('❌ loginWithPassword error: $e');
+      throw Exception('Error logging in with password: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> verifyOtp(String otp, String hashOtp) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/login-verify-otp/'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'OTP': otp,
+          'HASHOTP': hashOtp,
+        }),
+      );
+
+      print('📩 verify-otp request');
+      print('📩 Status: ${response.statusCode}');
+      print('📩 Body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final jsonData = jsonDecode(response.body);
+        if (jsonData['success'] == true || jsonData['sucesss'] == true) {
+          return {
+            'success': true,
+            'message': jsonData['message'] ?? 'OTP verified',
+            'user': jsonData['user'],
+          };
+        } else {
+          throw Exception(jsonData['message'] ?? 'Invalid OTP');
+        }
+      } else {
+        throw Exception('Failed to verify OTP (Status code: ${response.statusCode})');
+      }
+    } catch (e) {
+      print('❌ verifyOtp error: $e');
+      throw Exception('Error verifying OTP: $e');
+    }
+  }
+  Future<Map<String, dynamic>> signupNewUser(String phone, String gToken) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/signup-new-user/'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'phone': phone,
+          'Gtoken': gToken,
+          'password': '',
+        }),
+      );
+
+      print('📩 signup-new-user request with $phone');
+      print('📩 Status: ${response.statusCode}');
+      print('📩 Body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final jsonData = jsonDecode(response.body);
+        if (jsonData['success'] == true) {
+          return {
+            'success': true,
+            'userId': jsonData['existingUser']?['_id']?.toString(),
+            'phone': jsonData['existingUser']?['phone']?.toString(),
+            'message': jsonData['message'] ?? 'User signed up successfully',
+            'token': jsonData['token'],
+            'otp': jsonData['otp'],
+            'newotp': jsonData['newotp'],
+          };
+        } else {
+          throw Exception(jsonData['message'] ?? 'Failed to sign up user');
+        }
+      } else {
+        throw Exception('Failed to sign up user (Status code: ${response.statusCode})');
+      }
+    } catch (e) {
+      print('❌ signupNewUser error: $e');
+      throw Exception('Error signing up user: $e');
+    }
+  }
+  Future<Map<String, dynamic>> sendOtpForPasswordUser(String phone) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/login-with-otp/'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'phone': phone,
+          'password': '',
+        }),
+      );
+
+      print('📩 login-with-otp request with $phone');
+      print('📩 Status: ${response.statusCode}');
+      print('📩 Body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final jsonData = jsonDecode(response.body);
+
+        if (jsonData['success'] == true) {
+          print('✅ sendOtpForPasswordUser result: $jsonData');
+          print('💡 Plain OTP (newotp): ${jsonData['newotp']}');
+
+          return {
+            'success': true,
+            'hashotp': jsonData['otp'],
+            'plainOtp': jsonData['newotp'],
+            'message': jsonData['message'],
+            'user': jsonData['existingUser'],
+            'token': jsonData['token'],
+            'type': jsonData['type'],
+          };
+        } else {
+          throw Exception(jsonData['message'] ?? 'Failed to send OTP');
+        }
+      } else {
+        throw Exception('Failed to send OTP (Status code: ${response.statusCode})');
+      }
+    } catch (e) {
+      print('❌ sendOtpForPasswordUser error: $e');
+      throw Exception('Error sending OTP: $e');
+    }
+  }
 }
