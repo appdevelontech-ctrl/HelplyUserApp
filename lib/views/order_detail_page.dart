@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:user_app/services/api_services.dart';
+import 'package:flutter_easyloading/flutter_easyloading.dart';
+import '../services/api_services.dart';
 import '../models/order_model.dart';
+import 'dart:io';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:flutter_easyloading/flutter_easyloading.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_filex/open_filex.dart';
 import '../controllers/order_controller.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -27,49 +34,86 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
   @override
   void initState() {
     super.initState();
-    if (widget.orderController.orderDetails == null ||
-        widget.orderController.orderDetails!.id != widget.orderId) {
-      widget.orderController.fetchOrderDetails(widget.orderId).catchError((e) {
+    _fetchOrderDetails();
+  }
+
+  Future<void> _fetchOrderDetails() async {
+    final cachedOrder = widget.orderController.getOrderDetails(widget.orderId);
+    if (cachedOrder == null || cachedOrder.id != widget.orderId) {
+      if (widget.orderController.isOrderDetailsLoading) return;
+
+      try {
+        await EasyLoading.show(status: 'Loading order details...');
+        await widget.orderController.fetchOrderDetails(widget.orderId);
+        await EasyLoading.dismiss();
+      } catch (e) {
         setState(() {
           _errorMessage = e.toString();
           if (e.toString().contains('Status code: 404')) {
-            _errorMessage =
-            'Order not found. Please check the order ID or contact support.';
+            _errorMessage = 'Order not found. Please check the order ID or contact support.';
+          } else {
+            _errorMessage = 'Failed to load order details: $_errorMessage';
           }
         });
-      });
+        await EasyLoading.showError(_errorMessage!);
+        await EasyLoading.dismiss();
+      }
     }
   }
-
   Future<void> _downloadInvoice(String invoiceId) async {
     try {
+      print('Downloading invoice for ID: $invoiceId');
+
+      // Show loading
+      await EasyLoading.show(status: 'Downloading invoice...');
+
+      final url = '${ApiServices.baseUrl}/download-invoice-order';
       final response = await http.post(
-        Uri.parse('${ApiServices.baseUrl}/download-invoice-order'),
-        headers: {'Content-Type': 'application/json'},
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/pdf', // Important: expecting PDF
+        },
         body: jsonEncode({"invoiceId": invoiceId}),
       );
-      print('Response is : ${response.body}');
+
+      print('Status Code: ${response.statusCode}');
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        print("data is  $data");
-        if (data['success'] == true) {
-          // Handle the invoice download (e.g., open file or show success message)
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Invoice downloaded successfully')),
-          );
-        } else {
-          throw Exception('Failed to download invoice: ${data['message']}');
-        }
+        // Save PDF to device
+        final directory = await getApplicationDocumentsDirectory();
+        final filePath = '${directory.path}/invoice_$invoiceId.pdf';
+        final file = File(filePath);
+
+        await file.writeAsBytes(response.bodyBytes);
+        print('Invoice saved at: $filePath');
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invoice downloaded to $filePath')),
+        );
+
+        // Open PDF
+       // await OpenFile.open(filePath);
+
+        await EasyLoading.showSuccess('Invoice downloaded successfully');
       } else {
-        throw Exception('Failed to download invoice: ${response.statusCode}');
+        print('Failed with status: ${response.statusCode}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to download invoice (${response.statusCode})')),
+        );
+        await EasyLoading.showError('Failed to download invoice');
       }
     } catch (e) {
+      print('Exception: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error downloading invoice: $e')),
       );
+      await EasyLoading.showError('Error downloading invoice');
+    } finally {
+      await EasyLoading.dismiss();
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -79,10 +123,10 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         appBar: _buildAppBar('Order Details'),
         body: Consumer<OrderController>(
           builder: (context, controller, child) {
-            if (controller.loading) {
+            if (controller.isOrderDetailsLoading) {
               return const Center(
-                  child:
-                  CircularProgressIndicator(color: Colors.orangeAccent));
+                child: CircularProgressIndicator(color: Colors.orangeAccent),
+              );
             }
 
             if (_errorMessage != null) {
@@ -90,7 +134,9 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
+                    const Icon(Icons.error_outline, size: 50, color: Colors.red),
+                    const SizedBox(height: 16),
+                    Text(
                       "Failed to load order details.",
                       style: TextStyle(
                         fontSize: 18,
@@ -107,12 +153,21 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                       ),
                       textAlign: TextAlign.center,
                     ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: _fetchOrderDetails,
+                      child: const Text('Retry'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueAccent,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
                   ],
                 ),
               );
             }
 
-            final order = controller.orderDetails;
+            final order = controller.getOrderDetails(widget.orderId);
             if (order == null) {
               return const Center(
                 child: Text(
@@ -126,31 +181,35 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
               );
             }
 
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildOrderHeader(context, order),
-                  const SizedBox(height: 16),
-                  _buildUserDetails(context, order),
-                  const SizedBox(height: 16),
-                  _buildOrderDetails(context, order),
-                  const SizedBox(height: 16),
-                  if (order.items.isNotEmpty) _buildItemsList(context, order),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => _downloadInvoice(order.id), // Use order.id as invoiceId
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            return RefreshIndicator(
+              onRefresh: () => _fetchOrderDetails(),
+              color: Colors.orangeAccent,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildOrderHeader(context, order),
+                    const SizedBox(height: 16),
+                    _buildUserDetails(context, order),
+                    const SizedBox(height: 16),
+                    _buildOrderDetails(context, order),
+                    const SizedBox(height: 16),
+                    if (order.items.isNotEmpty) _buildItemsList(context, order),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => _downloadInvoice(order.id),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueAccent,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text(
+                        'Download Invoice',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
                     ),
-                    child: const Text(
-                      'Download Invoice',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             );
           },
@@ -215,14 +274,16 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
               ),
             ),
             const SizedBox(height: 12),
-            if (order.details.isNotEmpty) ...[
-              _buildDetailRow("Name", order.details[0].username),
-              _buildDetailRow("Phone", order.details[0].phone),
-              _buildDetailRow("Email", order.details[0].email),
-              _buildDetailRow("Address", order.details[0].address),
-              _buildDetailRow("State", order.details[0].state),
-              _buildDetailRow("Pincode", order.details[0].pincode),
-            ] else ...[
+            if (order.details.isNotEmpty)
+              ...[
+                _buildDetailRow("Name", order.details[0].username),
+                _buildDetailRow("Phone", order.details[0].phone),
+                _buildDetailRow("Email", order.details[0].email),
+                _buildDetailRow("Address", order.details[0].address),
+                _buildDetailRow("State", order.details[0].state),
+                _buildDetailRow("Pincode", order.details[0].pincode),
+              ]
+            else
               const Text(
                 "No customer information available.",
                 style: TextStyle(
@@ -230,7 +291,6 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                   color: Colors.grey,
                 ),
               ),
-            ],
           ],
         ),
       ),
@@ -255,8 +315,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
               ),
             ),
             const SizedBox(height: 12),
-            _buildDetailRow(
-                "Total Amount", "₹${order.totalAmount.toStringAsFixed(2)}"),
+            _buildDetailRow("Total Amount", "₹${order.totalAmount.toStringAsFixed(2)}"),
             _buildDetailRow("Payment Mode", order.mode),
             if (order.otp != null) _buildDetailRow("OTP", order.otp.toString()),
             _buildDetailRow("Payment Status", order.payment == 1 ? "Paid" : "Pending"),
@@ -395,9 +454,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: chipColor.computeLuminance() > 0.5
-              ? Colors.black87
-              : Colors.white,
+          color: chipColor.computeLuminance() > 0.5 ? Colors.black87 : Colors.white,
         ),
       ),
       backgroundColor: chipColor,
@@ -413,11 +470,11 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       case 1:
         return "Placed";
       case 2:
-        return "Accept";
+        return "Accepted";
       case 5:
         return "Started";
       case 7:
-        return "Complete";
+        return "Completed";
       default:
         return "Unknown";
     }
@@ -425,16 +482,9 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
 
   AppBar _buildAppBar(String title) {
     return AppBar(
-      leading: Builder(
-        builder: (context) => IconButton(
-          icon: Image.asset(
-            'assets/icons/back.png',
-            width: 24,
-            height: 24,
-            color: Colors.white,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back, color: Colors.white),
+        onPressed: () => Navigator.pop(context),
       ),
       title: Text(
         title,

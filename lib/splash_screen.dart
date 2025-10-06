@@ -52,20 +52,19 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final width = size.width;
-    final height = size.height;
-
     return Stack(
       fit: StackFit.expand,
       children: [
+        // Full screen image
         Image.asset(
           "assets/images/splash.jpeg",
-          fit: BoxFit.contain,
+          fit: BoxFit.cover, // <-- cover poori screen fill karega
         ),
+        // Overlay
         Container(
           color: Colors.black.withOpacity(0.3),
         ),
+        // Loading indicator
         const Center(
           child: CircularProgressIndicator(color: Colors.white),
         ),
@@ -73,3 +72,4 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 }
+

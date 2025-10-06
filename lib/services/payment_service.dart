@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../controllers/order_controller.dart';
@@ -65,10 +66,10 @@ class PaymentService {
       var options = {
         'key': 'rzp_test_uAogD6y8XGq1H0', // Your Razorpay Key
         'amount': (order.totalAmount * 100).toInt(),
-        'name': 'Your App Name',
+        'name': 'The Helply App',
         'description': 'Payment for Order #${order.orderId}',
         'order_id': razorpayOrderId,
-        'prefill': {'contact': '9334274325', 'email': 'rk9600460@gmail.com'},
+
         'external': {'wallets': ['paytm']},
       };
 
@@ -113,11 +114,14 @@ class PaymentService {
         }
       } else {
         print("❌ Payment Verification Failed: ${verifyResponse['message']}");
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("✅ Payment Successfully")),
-          );
-        }
+        Fluttertoast.showToast(
+          msg: "✅ Payment Successfully",
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+          fontSize: 16.0,
+        );
       }
     } catch (e) {
       print('❌ Error verifying payment: $e');

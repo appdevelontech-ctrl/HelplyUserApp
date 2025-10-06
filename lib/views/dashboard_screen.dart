@@ -9,6 +9,7 @@
   import '../widgets/hover_effect.dart';
   import 'service_category_detail_screen.dart';
 
+
   class DashboardScreen extends StatefulWidget {
     const DashboardScreen({super.key});
 
@@ -20,6 +21,7 @@
     bool _showSuggestion = true;
     AnimationController? _animationController;
     Animation<double>? _fadeAnimation;
+
 
     @override
     void initState() {
@@ -34,6 +36,7 @@
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final controller = Provider.of<HomeController>(context, listen: false);
+
         if (controller.selectedLocation == "Select Location" && _showSuggestion) {
           _animationController?.forward();
           Future.delayed(const Duration(seconds: 5), () {
@@ -75,11 +78,12 @@
                         child: Stack(
                           children: [
                             CachedNetworkImage(
-                              imageUrl:
-                              "https://backend-olxs.onrender.com/uploads/new/image-1758194895880.webp",
+                              imageUrl: controller.sliderImage.isNotEmpty
+                                  ? controller.sliderImage
+                                  : "https://backend-olxs.onrender.com/uploads/new/image-1758194895880.webp",
                               width: double.infinity,
                               height: 200,
-                              fit: BoxFit.cover,
+                              fit: BoxFit.contain,
                               placeholder: (context, url) => Shimmer.fromColors(
                                 baseColor: Colors.grey[300]!,
                                 highlightColor: Colors.grey[100]!,
@@ -119,17 +123,7 @@
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  const SizedBox(height: 6),
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.orangeAccent,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                    ),
-                                    onPressed: () {},
-                                    child: const Text("Explore Now"),
-                                  ),
+
                                 ],
                               ),
                             ),

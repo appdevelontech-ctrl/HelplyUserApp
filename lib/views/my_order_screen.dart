@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_easyloading/flutter_easyloading.dart';
 import '../controllers/order_controller.dart';
+import '../controllers/socket_controller.dart';
 import '../models/order_model.dart';
 import '../services/api_services.dart';
 import '../services/payment_service.dart';
 import 'package:shimmer/shimmer.dart';
-import '../controllers/socket_controller.dart';
 import 'live_tracking_page.dart';
 import 'order_detail_page.dart';
 import 'dart:convert';
@@ -37,16 +38,17 @@ class _UserOrdersPageState extends State<UserOrdersPage> with TickerProviderStat
     );
     _animationController.forward();
 
-    print('🚀 UserOrdersPage initialized');
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final socketController = Provider.of<SocketController>(context, listen: false);
-      final orderController = Provider.of<OrderController>(context, listen: false);
-      socketController.attachOrderController(orderController);
-      socketController.connect();
-
-      _fetchOrdersAndMerge();
+      _initializeSocketAndFetchOrders();
     });
+  }
+
+  Future<void> _initializeSocketAndFetchOrders() async {
+    final socketController = Provider.of<SocketController>(context, listen: false);
+    final orderController = Provider.of<OrderController>(context, listen: false);
+    socketController.attachOrderController(orderController);
+    socketController.connect();
+    await _fetchOrdersAndMerge();
   }
 
   @override
@@ -56,21 +58,19 @@ class _UserOrdersPageState extends State<UserOrdersPage> with TickerProviderStat
   }
 
   Future<void> _fetchOrdersAndMerge() async {
+    await EasyLoading.show(status: 'Fetching orders...');
     await _loadMaidInfo();
 
     final orderController = context.read<OrderController>();
     try {
       await orderController.fetchOrders();
       _mergeSavedMaidInfo(orderController.orders);
-      orderController.notifyListeners();
-      if (mounted) setState(() {});
+      await EasyLoading.dismiss();
     } catch (e) {
+      await EasyLoading.showError('Failed to load orders: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load orders: $e'),
-            duration: const Duration(seconds: 3),
-          ),
+          SnackBar(content: Text('Failed to load orders: $e')),
         );
       }
     }
@@ -78,6 +78,7 @@ class _UserOrdersPageState extends State<UserOrdersPage> with TickerProviderStat
 
   Future<void> _cancelOrderWithComment(String orderId, String comment) async {
     try {
+      await EasyLoading.show(status: 'Cancelling order...');
       final response = await http.put(
         Uri.parse('https://backend-olxs.onrender.com/cancel-order/$orderId'),
         headers: {'Content-Type': 'application/json'},
@@ -93,10 +94,8 @@ class _UserOrdersPageState extends State<UserOrdersPage> with TickerProviderStat
           map.remove(orderId);
           await prefs.setString('maid_info', jsonEncode(map));
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Order cancelled successfully')),
-          );
           await _fetchOrdersAndMerge();
+          await EasyLoading.showSuccess('Order cancelled successfully');
         } else {
           throw Exception('Failed to cancel order: ${data['message']}');
         }
@@ -104,9 +103,12 @@ class _UserOrdersPageState extends State<UserOrdersPage> with TickerProviderStat
         throw Exception('Failed to cancel order: ${response.statusCode}');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error cancelling order: $e')),
-      );
+      await EasyLoading.showError('Error cancelling order: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error cancelling order: $e')),
+        );
+      }
     }
   }
 
@@ -137,9 +139,8 @@ class _UserOrdersPageState extends State<UserOrdersPage> with TickerProviderStat
           maidLat: (info['maidLat'] as num?)?.toDouble() ?? updatedOrder.maidLat,
           maidLng: (info['maidLng'] as num?)?.toDouble() ?? updatedOrder.maidLng,
         );
+        orders[i] = updatedOrder;
       }
-
-      orders[i] = updatedOrder;
     }
 
     if (mounted) setState(() {});
@@ -148,7 +149,7 @@ class _UserOrdersPageState extends State<UserOrdersPage> with TickerProviderStat
   int _statusCodeFromServer(dynamic status) {
     if (status is int) {
       if ([0, 1, 2, 5, 7].contains(status)) return status;
-      print('⚠️ Invalid integer status received: $status, defaulting to 1 (Placed)');
+      debugPrint('⚠️ Invalid integer status received: $status, defaulting to 1 (Placed)');
       return 1;
     }
     if (status is String) {
@@ -159,11 +160,11 @@ class _UserOrdersPageState extends State<UserOrdersPage> with TickerProviderStat
         case 'started': return 5;
         case 'complete': case 'completed': return 7;
         default:
-          print('⚠️ Unrecognized status string: $status, defaulting to 1 (Placed)');
+          debugPrint('⚠️ Unrecognized status string: $status, defaulting to 1 (Placed)');
           return 1;
       }
     }
-    print('⚠️ Invalid status type: $status, defaulting to 1 (Placed)');
+    debugPrint('⚠️ Invalid status type: $status, defaulting to 1 (Placed)');
     return 1;
   }
 
@@ -174,17 +175,10 @@ class _UserOrdersPageState extends State<UserOrdersPage> with TickerProviderStat
       try {
         final decoded = jsonDecode(savedData) as Map<String, dynamic>;
         _maidInfoMap = decoded.map((key, value) => MapEntry(key, value));
-        setState(() {});
-        print("👩‍🧹 Loaded maid_info from prefs: $savedData");
-        print("👩‍🧹 Parsed _maidInfoMap keys: ${_maidInfoMap.keys.toList()}");
-        _maidInfoMap.forEach((orderId, info) {
-          print("👩‍🧹 Maid details for $orderId: ${info.toString()}");
-        });
+        if (mounted) setState(() {});
       } catch (e) {
-        print("❌ Error parsing maid_info: $e");
+        debugPrint('❌ Error parsing maid_info: $e');
       }
-    } else {
-      print("👩‍🧹 No maid_info found in prefs");
     }
   }
 
@@ -252,7 +246,7 @@ class _UserOrdersPageState extends State<UserOrdersPage> with TickerProviderStat
             color: Colors.orangeAccent,
             child: Consumer<OrderController>(
               builder: (context, controller, child) {
-                if (controller.loading) return _buildShimmerLoader();
+                if (controller.isOrdersLoading) return _buildShimmerLoader();
                 if (controller.orders.isEmpty) {
                   return const Center(
                     child: Column(
@@ -414,7 +408,7 @@ class _UserOrdersPageState extends State<UserOrdersPage> with TickerProviderStat
                       if (order.status == 7)
                         _buildPayButton(order, paymentService),
                       if (order.status == 5 && order.maidLat != null && order.maidLng != null)
-                        _buildLiveTrackButton(order, socketController, order),
+                        _buildLiveTrackButton(order, socketController),
                     ],
                   ),
                 ],
@@ -513,7 +507,15 @@ class _UserOrdersPageState extends State<UserOrdersPage> with TickerProviderStat
     return Align(
       alignment: Alignment.centerRight,
       child: ElevatedButton.icon(
-        onPressed: (order.payment == 1) ? null : () => paymentService.initiatePayment(order),
+        onPressed: (order.payment == 1) ? null : () async {
+          await EasyLoading.show(status: 'Initiating payment...');
+          try {
+            await paymentService.initiatePayment(order);
+            await EasyLoading.showSuccess('Payment initiated successfully');
+          } catch (e) {
+            await EasyLoading.showError('Failed to initiate payment: $e');
+          }
+        },
         icon: Icon((order.payment == 1) ? Icons.check : Icons.payment),
         label: Text((order.payment == 1) ? "Paid" : "Pay Now", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         style: ElevatedButton.styleFrom(
@@ -525,11 +527,11 @@ class _UserOrdersPageState extends State<UserOrdersPage> with TickerProviderStat
     );
   }
 
-  Widget _buildLiveTrackButton(Order order, SocketController socketController, Order currentOrder) {
+  Widget _buildLiveTrackButton(Order order, SocketController socketController) {
     return Align(
       alignment: Alignment.centerRight,
       child: ElevatedButton.icon(
-        onPressed: () => _onLiveTrackPressed(currentOrder, socketController),
+        onPressed: () => _onLiveTrackPressed(order, socketController),
         icon: const Icon(Icons.location_on, color: Colors.white),
         label: const Text("Live Track", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         style: ElevatedButton.styleFrom(
@@ -544,13 +546,6 @@ class _UserOrdersPageState extends State<UserOrdersPage> with TickerProviderStat
   void _onLiveTrackPressed(Order order, SocketController socketController) {
     final maidLat = order.maidLat ?? 0.0;
     final maidLng = order.maidLng ?? 0.0;
-    final maidName = order.maidName ?? 'Unknown';
-    final maidPhone = order.maidPhone ?? '';
-    final maidEmail = order.maidEmail ?? '';
-
-    print('➡️ Maid info for ${order.id} (orderId: ${order.orderId}): $maidName, $maidPhone, $maidEmail');
-    print('➡️ Maid coords for ${order.id} (orderId: ${order.orderId}): $maidLat, $maidLng');
-
     if (maidLat == 0.0 && maidLng == 0.0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Maid location not yet available. Please wait.')),
@@ -567,9 +562,9 @@ class _UserOrdersPageState extends State<UserOrdersPage> with TickerProviderStat
           maidLng: maidLng,
           userLat: order.userLat ?? 0.0,
           userLng: order.userLng ?? 0.0,
-          maidName: maidName,
-          maidPhone: maidPhone,
-          maidEmail: maidEmail,
+          maidName: order.maidName ?? 'Unknown',
+          maidPhone: order.maidPhone ?? '',
+          maidEmail: order.maidEmail ?? '',
           orderStatus: order.status,
         ),
       ),
@@ -580,7 +575,7 @@ class _UserOrdersPageState extends State<UserOrdersPage> with TickerProviderStat
     String statusText = _statusText(status);
     IconData icon;
     Color chipColor;
-    Color iconColor = Colors.white;
+    Color iconColor;
 
     switch (status) {
       case 0:
@@ -612,7 +607,6 @@ class _UserOrdersPageState extends State<UserOrdersPage> with TickerProviderStat
         chipColor = Colors.grey.shade100;
         icon = Icons.help_outline;
         iconColor = Colors.grey.shade700;
-        print('⚠️ Invalid status code: $status, displaying as Unknown');
     }
 
     return Container(

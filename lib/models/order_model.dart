@@ -13,9 +13,9 @@ class UserOrderResponse extends Equatable {
 
   factory UserOrderResponse.fromJson(Map<String, dynamic> json) {
     return UserOrderResponse(
-      success: json['success'] ?? false,
-      message: json['message'] ?? '',
-      userOrder: UserOrder.fromJson(json['userOrder'] ?? {}),
+      success: json['success'] as bool? ?? false,
+      message: json['message'] as String? ?? '',
+      userOrder: UserOrder.fromJson(json['userOrder'] as Map<String, dynamic>? ?? {}),
     );
   }
 
@@ -36,12 +36,9 @@ class UserOrder extends Equatable {
 
   factory UserOrder.fromJson(Map<String, dynamic> json) {
     return UserOrder(
-      id: json['_id'] ?? '',
-      orders: (json['orders'] as List<dynamic>?)
-          ?.map((o) => Order.fromJson(o))
-          .toList() ??
-          [],
-      order: json['order'] != null ? Order.fromJson(json['order']) : null,
+      id: json['_id'] as String? ?? '',
+      orders: (json['orders'] as List<dynamic>?)?.map((o) => Order.fromJson(o as Map<String, dynamic>)).toList() ?? [],
+      order: (json['order'] as Map<String, dynamic>?) != null ? Order.fromJson(json['order'] as Map<String, dynamic>) : null,
     );
   }
 
@@ -154,18 +151,18 @@ class Order extends Equatable {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       v: v ?? this.v,
-      items: items ?? this.items,
+      items: items ?? List<Item>.from(this.items),
       discount: discount ?? this.discount,
       shipping: shipping ?? this.shipping,
-      userId: userId ?? this.userId,
+      userId: userId ?? List<String>.from(this.userId),
       primary: primary ?? this.primary,
       leadStatus: leadStatus ?? this.leadStatus,
       type: type ?? this.type,
       lead: lead ?? this.lead,
-      category: category ?? this.category,
-      cancelId: cancelId ?? this.cancelId,
+      category: category ?? List<dynamic>.from(this.category),
+      cancelId: cancelId ?? List<dynamic>.from(this.cancelId),
       agentId: agentId ?? this.agentId,
-      details: details ?? this.details,
+      details: details ?? List<UserDetails>.from(this.details),
       maidName: maidName ?? this.maidName,
       maidPhone: maidPhone ?? this.maidPhone,
       maidEmail: maidEmail ?? this.maidEmail,
@@ -182,49 +179,45 @@ class Order extends Equatable {
       if (val is double) return val;
       if (val is int) return val.toDouble();
       if (val is String) return double.tryParse(val);
+
       return null;
     }
 
     int? parseInt(dynamic val) {
       if (val == null) return null;
       if (val is int) return val;
-      if (val is String) return int.tryParse(val);
       if (val is double) return val.toInt();
+      if (val is String) return int.tryParse(val);
+
       return null;
     }
 
     return Order(
-      id: json['_id'] ?? '',
-      mode: json['mode'] ?? '',
+      id: json['_id'] as String? ?? '',
+      mode: json['mode'] as String? ?? '',
       totalAmount: parseDouble(json['totalAmount']) ?? 0.0,
       payment: parseInt(json['payment']) ?? 0,
       status: parseInt(json['status']) ?? 0,
       orderId: parseInt(json['orderId']) ?? 0,
-      otp: parseInt(json['OTP']),
-      createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
-      updatedAt: json['updatedAt'],
+      otp: parseInt(json['otp'] ?? json['OTP']), // Check both 'otp' and 'OTP'
+      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+      updatedAt: json['updatedAt'] as String?,
       v: parseInt(json['__v']) ?? 0,
-      items: (json['items'] as List<dynamic>?)
-          ?.map((i) => Item.fromJson(i))
-          .toList() ??
-          [],
-      discount: json['discount'] ?? '0',
-      shipping: json['shipping'] ?? '0',
+      items: (json['items'] as List<dynamic>?)?.map((i) => Item.fromJson(i as Map<String, dynamic>)).toList() ?? [],
+      discount: json['discount'] as String? ?? '0',
+      shipping: json['shipping'] as String? ?? '0',
       userId: (json['userId'] as List<dynamic>?)?.cast<String>() ?? [],
-      primary: json['primary'],
+      primary: json['primary'] as String?,
       leadStatus: parseInt(json['leadStatus']) ?? 0,
       type: parseInt(json['type']) ?? 0,
       lead: parseInt(json['lead']) ?? 0,
-      category: json['category'] ?? [],
-      cancelId: json['CancelId'] ?? [],
-      agentId: json['agentId'] ?? '',
-      details: (json['details'] as List<dynamic>?)
-          ?.map((d) => UserDetails.fromJson(d))
-          .toList() ??
-          [],
-      maidName: json['maidName'],
-      maidPhone: json['maidPhone'],
-      maidEmail: json['maidEmail'],
+      category: json['category'] as List<dynamic>? ?? [],
+      cancelId: json['cancelId'] as List<dynamic>? ?? [], // Fixed key to 'cancelId'
+      agentId: json['agentId'] as String? ?? '',
+      details: (json['details'] as List<dynamic>?)?.map((d) => UserDetails.fromJson(d as Map<String, dynamic>)).toList() ?? [],
+      maidName: json['maidName'] as String?,
+      maidPhone: json['maidPhone'] as String?,
+      maidEmail: json['maidEmail'] as String?,
       maidLat: parseDouble(json['maidLat']),
       maidLng: parseDouble(json['maidLng']),
       userLat: parseDouble(json['userLat']),
@@ -285,12 +278,12 @@ class UserDetails extends Equatable {
 
   factory UserDetails.fromJson(Map<String, dynamic> json) {
     return UserDetails(
-      username: json['username'] ?? '',
-      phone: json['phone'] ?? '',
-      pincode: json['pincode'] ?? '',
-      state: json['state'] ?? '',
-      address: json['address'] ?? '',
-      email: json['email'] ?? '',
+      username: json['username'] as String? ?? '',
+      phone: json['phone'] as String? ?? '',
+      pincode: json['pincode'] as String? ?? '',
+      state: json['state'] as String? ?? '',
+      address: json['address'] as String? ?? '',
+      email: json['email'] as String? ?? '',
     );
   }
 
@@ -335,22 +328,23 @@ class Item extends Equatable {
       if (val is int) return val;
       if (val is double) return val.toInt();
       if (val is String) return int.tryParse(val) ?? 0;
+
       return 0;
     }
 
     return Item(
-      id: json['id'] ?? '',
-      title: json['title'] ?? '',
-      image: json['image'] ?? '',
+      id: json['id'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      image: json['image'] as String? ?? '',
       regularPrice: parseInt(json['regularPrice']),
       price: parseInt(json['price']),
-      color: json['color'] ?? '',
-      customise: json['customise'] ?? '',
+      color: json['color'] as String? ?? '',
+      customise: json['customise'] as String? ?? '',
       totalQuantity: parseInt(json['TotalQuantity']),
       weight: parseInt(json['weight']),
       gst: parseInt(json['gst']),
       stock: parseInt(json['stock']),
-      pid: json['pid'] ?? '',
+      pid: json['pid'] as String? ?? '',
       quantity: parseInt(json['quantity']),
     );
   }

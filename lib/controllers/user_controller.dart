@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../main_screen.dart';
@@ -15,9 +16,9 @@ class UserController extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   String? _hashOtp;
-  bool _isNewUser = false; // New flag to track if user is new
-  String? _phone; // Store phone number for signup
-  String? _gToken; // Store Gtoken for signup
+  bool _isNewUser = false;
+  String? _phone;
+  String? _gToken;
   bool _passwordRequired = false;
   final ApiServices _apiServices = ApiServices();
 
@@ -31,6 +32,7 @@ class UserController extends ChangeNotifier {
     _errorMessage = value;
     notifyListeners();
   }
+
   Future<void> loginWithPhone(String phone, BuildContext context) async {
     _isLoading = true;
     _errorMessage = null;
@@ -38,6 +40,7 @@ class UserController extends ChangeNotifier {
     _isNewUser = false;
     _hashOtp = null;
     notifyListeners();
+    EasyLoading.show(status: 'Sending OTP...');
 
     try {
       final result = await _apiServices.loginWithOtp(phone);
@@ -46,7 +49,7 @@ class UserController extends ChangeNotifier {
       _phone = phone;
       _hashOtp = result['hashotp'];
       _isNewUser = result['newUser'] ?? false;
-      _gToken = 'sddwdwdwdd';
+      _gToken = 'sddwdwdwdd'; // Consider fetching from result if dynamic
       _passwordRequired = result['passwordRequired'] ?? false;
 
       final prefs = await SharedPreferences.getInstance();
@@ -64,6 +67,7 @@ class UserController extends ChangeNotifier {
         print("💾 Hashed OTP saved: ${prefs.getString('hashOtp')}");
         _isLoading = false;
         notifyListeners();
+        EasyLoading.showSuccess('OTP sent successfully!');
 
         print("📌 OTP for testing: ${result['plainOtp']}");
         Navigator.push(
@@ -73,30 +77,37 @@ class UserController extends ChangeNotifier {
       } else if (_passwordRequired) {
         _isLoading = false;
         notifyListeners();
+        EasyLoading.dismiss();
       } else {
         throw Exception('No OTP received. Please try again or contact support.');
       }
     } catch (e) {
       _isLoading = false;
-      // Extract the clean API message
       String errorMsg = e.toString();
-      // Remove all "Exception: " prefixes iteratively
       while (errorMsg.startsWith('Exception: ')) {
         errorMsg = errorMsg.replaceFirst('Exception: ', '');
       }
-      _errorMessage = errorMsg; // Set the clean message
-      // Clear SharedPreferences to prevent login with stale data
+      _errorMessage = errorMsg;
+      EasyLoading.showError('Failed to send OTP: $errorMsg');
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
       _isLoggedIn = false;
       notifyListeners();
       print('❌ loginWithPhone error: $e');
+    } finally {
+      if (_isLoading) {
+        _isLoading = false;
+        notifyListeners();
+        EasyLoading.dismiss();
+      }
     }
   }
+
   Future<void> sendOtpForPasswordUser(String phone, BuildContext context) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
+    EasyLoading.show(status: 'Sending OTP...');
 
     try {
       final result = await _apiServices.sendOtpForPasswordUser(phone);
@@ -116,6 +127,7 @@ class UserController extends ChangeNotifier {
 
       _isLoading = false;
       notifyListeners();
+      EasyLoading.showSuccess('OTP sent successfully!');
 
       print("📌 OTP for testing: ${result['plainOtp']}");
       Navigator.push(
@@ -125,14 +137,23 @@ class UserController extends ChangeNotifier {
     } catch (e) {
       _isLoading = false;
       _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      EasyLoading.showError('Failed to send OTP: $_errorMessage');
       notifyListeners();
       print('❌ sendOtpForPasswordUser error: $e');
+    } finally {
+      if (_isLoading) {
+        _isLoading = false;
+        notifyListeners();
+        EasyLoading.dismiss();
+      }
     }
   }
+
   Future<void> loginWithPassword(String phone, String password, BuildContext context) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
+    EasyLoading.show(status: 'Logging in...');
 
     try {
       final result = await _apiServices.loginWithPassword(phone, password);
@@ -149,23 +170,31 @@ class UserController extends ChangeNotifier {
         _isLoggedIn = true;
         _isLoading = false;
         notifyListeners();
+        EasyLoading.showSuccess('Login successful!');
 
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const MainScreen()),
-              (Route<dynamic> route) => false, // removes all previous routes
+              (Route<dynamic> route) => false,
         );
-
       } else {
         throw Exception(result['message'] ?? 'Invalid credentials');
       }
     } catch (e) {
       _isLoading = false;
       _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      EasyLoading.showError('Login failed: $_errorMessage');
       notifyListeners();
       print('❌ loginWithPassword error: $e');
+    } finally {
+      if (_isLoading) {
+        _isLoading = false;
+        notifyListeners();
+        EasyLoading.dismiss();
+      }
     }
   }
+
   Future<void> verifyOtp(String otp, BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
     _hashOtp ??= prefs.getString('hashOtp');
@@ -175,6 +204,7 @@ class UserController extends ChangeNotifier {
     if (_hashOtp == null || _phone == null) {
       _isLoading = false;
       _errorMessage = 'OTP or phone number not found. Please resend OTP.';
+      EasyLoading.showError('$_errorMessage');
       notifyListeners();
       return;
     }
@@ -182,6 +212,7 @@ class UserController extends ChangeNotifier {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
+    EasyLoading.show(status: 'Verifying OTP...');
 
     try {
       final verifyResult = await _apiServices.verifyOtp(otp, _hashOtp!);
@@ -208,13 +239,13 @@ class UserController extends ChangeNotifier {
             _isLoggedIn = true;
             _isLoading = false;
             notifyListeners();
+            EasyLoading.showSuccess('OTP verified and account created!');
 
             Navigator.pushAndRemoveUntil(
               context,
               MaterialPageRoute(builder: (context) => const MainScreen()),
-                  (Route<dynamic> route) => false, // removes all previous routes
+                  (Route<dynamic> route) => false,
             );
-
           } else {
             throw Exception(signupResult['message'] ?? 'Failed to sign up user');
           }
@@ -225,6 +256,7 @@ class UserController extends ChangeNotifier {
             _isLoggedIn = true;
             _isLoading = false;
             notifyListeners();
+            EasyLoading.showSuccess('OTP verified successfully!');
 
             Navigator.pushReplacement(
               context,
@@ -240,11 +272,23 @@ class UserController extends ChangeNotifier {
     } catch (e) {
       _isLoading = false;
       _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      EasyLoading.showError('OTP verification failed: $_errorMessage');
       notifyListeners();
       print('❌ verifyOtp error: $e');
+    } finally {
+      if (_isLoading) {
+        _isLoading = false;
+        notifyListeners();
+        EasyLoading.dismiss();
+      }
     }
   }
+
   Future<void> fetchUserDetails(String userId) async {
+    _isLoading = true;
+    notifyListeners();
+
+
     try {
       final response = await _apiServices.getUser(userId);
       print('📩 Fetching user details for userId: $userId');
@@ -276,16 +320,27 @@ class UserController extends ChangeNotifier {
         await prefs.setInt('verified', _user!.verified ?? 0);
         await prefs.setInt('wallet', _user!.wallet ?? 0);
         await prefs.setInt('online', _user!.online ?? 0);
+        _isLoading = false;
         notifyListeners();
+
       } else {
         throw Exception(response['message'] ?? 'Failed to fetch user details');
       }
     } catch (e) {
+      _isLoading = false;
+      _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      EasyLoading.showError('Failed to fetch user details: $_errorMessage');
+      notifyListeners();
       print('❌ Error fetching user details: $e');
       throw Exception('Error fetching user details: $e');
+    } finally {
+      if (_isLoading) {
+        _isLoading = false;
+        notifyListeners();
+        EasyLoading.dismiss();
+      }
     }
   }
-
 
   Future<bool> updateUserDetails({
     required String userId,
@@ -321,6 +376,7 @@ class UserController extends ChangeNotifier {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
+    EasyLoading.show(status: 'Updating user details...');
 
     try {
       final String? finalDoc1 = profileImage?.path ?? doc1 ?? _user?.doc1;
@@ -418,7 +474,6 @@ class UserController extends ChangeNotifier {
               online: online ?? _user?.online,
             );
 
-            // Save to SharedPreferences
             await prefs.setString('username', username);
             await prefs.setString('email', email);
             await prefs.setString('phone', phone);
@@ -447,6 +502,7 @@ class UserController extends ChangeNotifier {
 
             _isLoading = false;
             notifyListeners();
+            EasyLoading.showSuccess('User details updated successfully!');
             return true;
           } else {
             throw Exception(jsonData['message'] ?? 'Failed to update user details');
@@ -469,9 +525,16 @@ class UserController extends ChangeNotifier {
     } catch (e) {
       _isLoading = false;
       _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      EasyLoading.showError('Failed to update user details: $_errorMessage');
       notifyListeners();
       print('❌ Error updating user details: $_errorMessage');
       return false;
+    } finally {
+      if (_isLoading) {
+        _isLoading = false;
+        notifyListeners();
+        EasyLoading.dismiss();
+      }
     }
   }
 
@@ -492,6 +555,7 @@ class UserController extends ChangeNotifier {
           );
         } catch (e) {
           _errorMessage = 'Failed to load user details. Please log in again.';
+          EasyLoading.showError('$_errorMessage');
           await logout();
           notifyListeners();
           Navigator.pushReplacement(
@@ -513,20 +577,18 @@ class UserController extends ChangeNotifier {
       );
     }
   }
+
   Future<void> logout() async {
     print("🚪 Logging out user...");
+    EasyLoading.show(status: 'Logging out...');
     final prefs = await SharedPreferences.getInstance();
 
     final currentUserId = prefs.getString('userId');
-
-    // ✅ Get current user's maid_info
     final maidInfo = prefs.getString('maid_info_$currentUserId');
 
-    // Clear everything else
     await prefs.clear();
     print("💾 SharedPreferences cleared.");
 
-    // ✅ Restore only this user’s maid_info
     if (maidInfo != null && maidInfo.isNotEmpty && currentUserId != null) {
       await prefs.setString('maid_info_$currentUserId', maidInfo);
       print("💾 maid_info preserved for userId: $currentUserId ✅");
@@ -535,13 +597,14 @@ class UserController extends ChangeNotifier {
     _user = null;
     _isLoggedIn = false;
     notifyListeners();
+    EasyLoading.showSuccess('Logged out successfully!');
   }
-
 
   Future<void> deleteAccount(BuildContext context) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
+    EasyLoading.show(status: 'Deleting account...');
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -558,6 +621,7 @@ class UserController extends ChangeNotifier {
         await logout();
         _isLoading = false;
         notifyListeners();
+        EasyLoading.showSuccess('Account deleted successfully!');
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -568,9 +632,16 @@ class UserController extends ChangeNotifier {
     } catch (e) {
       _isLoading = false;
       _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      EasyLoading.showError('Failed to delete account: $_errorMessage');
       notifyListeners();
       print('❌ deleteAccount error: $e');
       throw Exception(_errorMessage);
+    } finally {
+      if (_isLoading) {
+        _isLoading = false;
+        notifyListeners();
+        EasyLoading.dismiss();
+      }
     }
   }
 }

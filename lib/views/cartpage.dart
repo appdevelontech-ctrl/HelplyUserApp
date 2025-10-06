@@ -1,10 +1,10 @@
 import 'dart:convert';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:fluttertoast/fluttertoast.dart';
+import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:google_place/google_place.dart';
 import 'package:user_app/main_screen.dart';
 import '../controllers/cart_provider.dart';
@@ -35,49 +35,20 @@ class _CartPageState extends State<CartPage> {
   List<AutocompletePrediction> _predictions = [];
   double? _latitude;
   double? _longitude;
+  String? _errorMessage;
 
   final PageController _pageController = PageController();
   int _currentStep = 0;
   bool _isLoading = false;
 
-  // List of valid states
   final List<String> _states = [
-    "Andhra Pradesh",
-    "Arunachal Pradesh",
-    "Assam",
-    "Bihar",
-    "Chhattisgarh",
-    "Goa",
-    "Gujarat",
-    "Haryana",
-    "Himachal Pradesh",
-    "Jharkhand",
-    "Karnataka",
-    "Kerala",
-    "Madhya Pradesh",
-    "Maharashtra",
-    "Manipur",
-    "Meghalaya",
-    "Mizoram",
-    "Nagaland",
-    "Odisha",
-    "Punjab",
-    "Rajasthan",
-    "Sikkim",
-    "Tamil Nadu",
-    "Telangana",
-    "Tripura",
-    "Uttar Pradesh",
-    "Uttarakhand",
-    "West Bengal",
-    "Andaman and Nicobar Islands",
-    "Chandigarh",
-    "Dadra and Nagar Haveli and Daman and Diu",
-    "Delhi",
-    "Jammu and Kashmir",
-    "Ladakh",
-    "Lakshadweep",
-    "Puducherry"
+    "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa",
+    "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala",
+    "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland",
+    "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura",
+    "Uttar Pradesh", "Uttarakhand", "West Bengal", "Andaman and Nicobar Islands",
+    "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu", "Delhi",
+    "Jammu and Kashmir", "Ladakh", "Lakshadweep", "Puducherry"
   ];
 
   @override
@@ -90,13 +61,18 @@ class _CartPageState extends State<CartPage> {
   }
 
   Future<void> _loadUserDetails() async {
-    final userController = Provider.of<UserController>(context, listen: false);
-    final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getString('userId');
-    if (userId != null && userId.isNotEmpty) {
-      try {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final userController = Provider.of<UserController>(context, listen: false);
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('userId');
+      if (userId != null && userId.isNotEmpty) {
         await userController.fetchUserDetails(userId);
-        // Reload prefs after fetch to get updated values
         final updatedPrefs = await SharedPreferences.getInstance();
         if (mounted) {
           setState(() {
@@ -105,14 +81,35 @@ class _CartPageState extends State<CartPage> {
             _emailController.text = updatedPrefs.getString('email') ?? '';
             _pincodeController.text = updatedPrefs.getString('pincode') ?? '';
             _addressController.text = updatedPrefs.getString('address') ?? '';
-            // Validate state against the _states list
             final storedState = updatedPrefs.getString('state');
             _selectedState = _states.contains(storedState) ? storedState : null;
           });
         }
-      } catch (e) {
-        print('❌ Error loading user details: $e');
+        await EasyLoading.dismiss();
+      } else {
+        throw Exception('User ID not found');
       }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Failed to load user details: $e';
+      });
+      await EasyLoading.showError(_errorMessage!);
+      debugPrint('❌ Error loading user details: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+      await EasyLoading.dismiss();
+    }
+  }
+
+  Future<void> _refreshCart() async {
+    await EasyLoading.show(status: 'Refreshing cart...');
+    try {
+      await _loadUserDetails();
+      await EasyLoading.showSuccess('Cart refreshed successfully');
+    } catch (e) {
+      await EasyLoading.showError('Failed to refresh cart: $e');
     }
   }
 
@@ -137,7 +134,7 @@ class _CartPageState extends State<CartPage> {
     }
 
     _googlePlace.autocomplete.get(input).then((result) {
-      if (result != null && result.predictions != null) {
+      if (result != null && result.predictions != null && mounted) {
         setState(() {
           _predictions = result.predictions!;
         });
@@ -146,31 +143,36 @@ class _CartPageState extends State<CartPage> {
   }
 
   Future<void> _getPlaceDetails(String placeId) async {
-    var result = await _googlePlace.details.get(placeId);
-    if (result != null && result.result != null) {
-      setState(() {
-        _locationController.text = result.result!.formattedAddress!;
-        _latitude = result.result!.geometry!.location!.lat;
-        _longitude = result.result!.geometry!.location!.lng;
-        _predictions.clear();
-        print("_latitude is : $_latitude and Longitude is : $_longitude");
-      });
+    await EasyLoading.show(status: 'Fetching location details...');
+    try {
+      var result = await _googlePlace.details.get(placeId);
+      if (result != null && result.result != null && mounted) {
+        setState(() {
+          _locationController.text = result.result!.formattedAddress!;
+          _latitude = result.result!.geometry!.location!.lat;
+          _longitude = result.result!.geometry!.location!.lng;
+          _predictions.clear();
+          debugPrint("📍 Latitude: $_latitude, Longitude: $_longitude");
+        });
+        await EasyLoading.dismiss();
+      } else {
+        throw Exception('Failed to fetch location details');
+      }
+    } catch (e) {
+      await EasyLoading.showError('Failed to fetch location: $e');
+      debugPrint('❌ Error fetching place details: $e');
     }
   }
 
   void _nextStep(CartProvider cartProvider) {
     if (_currentStep == 0) {
       if (cartProvider.cartItems.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cart is empty. Add items to proceed.')),
-        );
+        EasyLoading.showError('Cart is empty. Add items to proceed.');
         return;
       }
       for (var item in cartProvider.cartItems) {
         if (item.selectedDate == null || item.selectedTime == null || item.selectedDuration == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('All items must have a selected date, time, and duration.')),
-          );
+          EasyLoading.showError('All items must have a selected date, time, and duration.');
           return;
         }
       }
@@ -182,14 +184,11 @@ class _CartPageState extends State<CartPage> {
     } else if (_currentStep == 1) {
       if (_formKey.currentState!.validate()) {
         if (_latitude == null || _longitude == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please select a valid location from the suggestions.')),
-          );
+          EasyLoading.showError('Please select a valid location from the suggestions.');
           return;
         }
         // Save state to SharedPreferences
-        final prefs = SharedPreferences.getInstance();
-        prefs.then((p) => p.setString('state', _selectedState ?? ''));
+        SharedPreferences.getInstance().then((prefs) => prefs.setString('state', _selectedState ?? ''));
         _pageController.nextPage(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
@@ -212,7 +211,9 @@ class _CartPageState extends State<CartPage> {
   }
 
   Future<void> _confirmPayment() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
+    await EasyLoading.show(status: 'Processing payment...');
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
     final socketController = Provider.of<SocketController>(context, listen: false);
 
@@ -265,7 +266,7 @@ class _CartPageState extends State<CartPage> {
         'verified': 1,
       };
 
-      print('Order Data: ${jsonEncode(orderData)}');
+      debugPrint('📦 Order Data: ${jsonEncode(orderData)}');
 
       final result = await _apiServices.createOrder(userId, orderData);
 
@@ -277,78 +278,75 @@ class _CartPageState extends State<CartPage> {
           'order': newOrder,
           'orderId': newOrder['orderId'],
         };
-        print('Send Messages $sendmsg');
+        debugPrint('📡 Sending socket message: $sendmsg');
         await socketController.sendOrderNotification(sendmsg);
       } else {
-        print('⚠️ New order data is null, skipping socket notification');
+        debugPrint('⚠️ New order data is null, skipping socket notification');
       }
       cartProvider.clearCart();
+      await EasyLoading.showSuccess('Order placed successfully!');
       setState(() => _isLoading = false);
 
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          title: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.green, size: 24),
-              const SizedBox(width: 8),
-              const Text(
-                'Order Confirmed',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                  color: Colors.green,
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            title: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.green, size: 24),
+                SizedBox(width: 8),
+                Text(
+                  'Order Confirmed',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.green),
                 ),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Your order has been placed successfully on ${DateFormat('EEEE, MMMM d, yyyy').format(DateTime.now())} at ${DateFormat('h:mm a').format(DateTime.now())} IST!',
-                style: const TextStyle(fontSize: 16, color: Colors.black87),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Order Status: Created',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                result['message'] ?? 'Thank you for your purchase!',
-                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => MainScreen()));
-              },
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.blue,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: const Text(
-                'Back to Home',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-              ),
+              ],
             ),
-          ],
-        ),
-      );
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Your order has been placed successfully on ${DateFormat('EEEE, MMMM d, yyyy').format(DateTime.now())} at ${DateFormat('h:mm a').format(DateTime.now())} IST!',
+                  style: const TextStyle(fontSize: 16, color: Colors.black87),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Order Status: Created',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  result['message'] ?? 'Thank you for your purchase!',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (context) => const MainScreen()),
+                        (route) => false,
+                  );
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.blue,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('Back to Home', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+              ),
+            ],
+          ),
+        );
+      }
     } catch (e) {
       setState(() => _isLoading = false);
-      showToast('Failed to create order: $e');
+      await EasyLoading.showError('Failed to create order: $e');
+      debugPrint('❌ Error creating order: $e');
     }
   }
 
@@ -358,24 +356,31 @@ class _CartPageState extends State<CartPage> {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
 
-    if (cartProvider.cartItems.isEmpty) {
+    if (_isLoading && _errorMessage == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: Colors.blue)),
+      );
+    }
+
+    if (_errorMessage != null) {
       return Scaffold(
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text(
-                "Your cart is empty",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey,
-                ),
-              ),
-              SizedBox(height: screenHeight * 0.02),
               Text(
-                'Add items to your cart to proceed.',
-                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                _errorMessage!,
+                style: const TextStyle(fontSize: 16, color: Colors.red),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _loadUserDetails,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text('Retry'),
               ),
             ],
           ),
@@ -383,88 +388,120 @@ class _CartPageState extends State<CartPage> {
       );
     }
 
-    return Scaffold(
-      body: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildStepCircle(0, 'Cart'),
-                _buildStepLine(0),
-                _buildStepCircle(1, 'Checkout'),
-                _buildStepLine(1),
-                _buildStepCircle(2, 'Payment'),
-              ],
-            ),
-          ),
-          Expanded(
-            child: PageView(
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
-              onPageChanged: (index) {
-                setState(() => _currentStep = index);
-              },
-              children: [
-                _buildCartStep(cartProvider, screenWidth, screenHeight),
-                _buildCheckoutStep(cartProvider, screenWidth, screenHeight),
-                _buildPaymentStep(cartProvider, screenWidth, screenHeight),
-              ],
-            ),
-          ),
-          Container(
-            padding: EdgeInsets.all(screenWidth * 0.04),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.2),
-                  spreadRadius: 2,
-                  blurRadius: 5,
-                  offset: const Offset(0, -2),
+    if (cartProvider.cartItems.isEmpty) {
+      return Scaffold(
+        body: RefreshIndicator(
+          onRefresh: _refreshCart,
+          color: Colors.blueAccent,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: SizedBox(
+              height: screenHeight,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text(
+                      "Your cart is empty",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
+                    ),
+                    SizedBox(height: screenHeight * 0.02),
+                    Text(
+                      'Add items to your cart to proceed.',
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                    ),
+
+                  ],
                 ),
-              ],
+              ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                if (_currentStep > 0)
-                  ElevatedButton(
-                    onPressed: _previousStep,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      body: RefreshIndicator(
+        onRefresh: _refreshCart,
+        color: Colors.blueAccent,
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: screenHeight * 0.02),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildStepCircle(0, 'Cart'),
+                  _buildStepLine(0),
+                  _buildStepCircle(1, 'Checkout'),
+                  _buildStepLine(1),
+                  _buildStepCircle(2, 'Payment'),
+                ],
+              ),
+            ),
+            Expanded(
+              child: PageView(
+                controller: _pageController,
+                physics: const NeverScrollableScrollPhysics(),
+                onPageChanged: (index) {
+                  if (mounted) setState(() => _currentStep = index);
+                },
+                children: [
+                  _buildCartStep(cartProvider, screenWidth, screenHeight),
+                  _buildCheckoutStep(cartProvider, screenWidth, screenHeight),
+                  _buildPaymentStep(cartProvider, screenWidth, screenHeight),
+                ],
+              ),
+            ),
+            Container(
+              padding: EdgeInsets.all(screenWidth * 0.04),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.2),
+                    spreadRadius: 2,
+                    blurRadius: 5,
+                    offset: const Offset(0, -2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  if (_currentStep > 0)
+                    ElevatedButton(
+                      onPressed: _isLoading ? null : _previousStep,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        minimumSize: Size(screenWidth * 0.3, screenHeight * 0.06),
                       ),
+                      child: const Text('Back'),
+                    ),
+                  Expanded(child: const SizedBox.shrink()),
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : () => _nextStep(cartProvider),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       minimumSize: Size(screenWidth * 0.3, screenHeight * 0.06),
                     ),
-                    child: const Text('Back'),
+                    child: _isLoading
+                        ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(color: Colors.white),
+                    )
+                        : Text(_currentStep == 2 ? 'Pay Now' : 'Next'),
                   ),
-                Expanded(child: SizedBox.shrink()),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : () => _nextStep(cartProvider),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    minimumSize: Size(screenWidth * 0.3, screenHeight * 0.06),
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(color: Colors.white),
-                  )
-                      : Text(_currentStep == 2 ? 'Pay Now' : 'Next'),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -505,12 +542,8 @@ class _CartPageState extends State<CartPage> {
     final dateFormat = DateFormat('EEE, d MMM');
     final timeFormat = DateFormat('h:mm a');
     final duration = item.selectedDuration ?? 'Not specified';
-    final displayDate = item.selectedDate != null
-        ? dateFormat.format(item.selectedDate!)
-        : 'Date not selected';
-    final displayTime = item.selectedTime != null
-        ? timeFormat.format(item.selectedTime!)
-        : 'Time not selected';
+    final displayDate = item.selectedDate != null ? dateFormat.format(item.selectedDate!) : 'Date not selected';
+    final displayTime = item.selectedTime != null ? timeFormat.format(item.selectedTime!) : 'Time not selected';
 
     return Card(
       elevation: 4,
@@ -538,21 +571,11 @@ class _CartPageState extends State<CartPage> {
                 children: [
                   Text(
                     item.title,
-                    style: TextStyle(
-                      fontSize: screenWidth * 0.045,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
+                    style: TextStyle(fontSize: screenWidth * 0.045, fontWeight: FontWeight.bold, color: Colors.black87),
                   ),
                   SizedBox(height: screenWidth * 0.015),
-                  Text(
-                    '• Date: $displayDate',
-                    style: TextStyle(fontSize: screenWidth * 0.035, color: Colors.grey[600]),
-                  ),
-                  Text(
-                    '• Time: $displayTime / $duration',
-                    style: TextStyle(fontSize: screenWidth * 0.035, color: Colors.grey[600]),
-                  ),
+                  Text('• Date: $displayDate', style: TextStyle(fontSize: screenWidth * 0.035, color: Colors.grey[600])),
+                  Text('• Time: $displayTime / $duration', style: TextStyle(fontSize: screenWidth * 0.035, color: Colors.grey[600])),
                 ],
               ),
             ),
@@ -561,16 +584,18 @@ class _CartPageState extends State<CartPage> {
               children: [
                 Text(
                   '₹${item.salePrice.toStringAsFixed(0)}',
-                  style: TextStyle(
-                    fontSize: screenWidth * 0.045,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue[700],
-                  ),
+                  style: TextStyle(fontSize: screenWidth * 0.045, fontWeight: FontWeight.bold, color: Colors.blue[700]),
                 ),
                 IconButton(
                   icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: () {
-                    Provider.of<CartProvider>(context, listen: false).removeFromCart(item);
+                  onPressed: () async {
+                    await EasyLoading.show(status: 'Removing item...');
+                    try {
+                      Provider.of<CartProvider>(context, listen: false).removeFromCart(item);
+                      await EasyLoading.showSuccess('Item removed from cart');
+                    } catch (e) {
+                      await EasyLoading.showError('Failed to remove item: $e');
+                    }
                   },
                 ),
               ],
@@ -592,7 +617,9 @@ class _CartPageState extends State<CartPage> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
             ),
             SizedBox(height: screenHeight * 0.02),
-            Text('No cart here'),
+            Text('No cart here', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+
+
           ],
         ),
       );
@@ -603,22 +630,14 @@ class _CartPageState extends State<CartPage> {
       children: [
         Text(
           "Your Cart",
-          style: TextStyle(
-            fontSize: screenWidth * 0.06,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
+          style: TextStyle(fontSize: screenWidth * 0.06, fontWeight: FontWeight.bold, color: Colors.black87),
         ),
         SizedBox(height: screenWidth * 0.03),
         ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: cartProvider.cartItems.length,
-          itemBuilder: (context, index) => _buildCartItem(
-            cartProvider.cartItems[index],
-            screenWidth,
-            screenHeight,
-          ),
+          itemBuilder: (context, index) => _buildCartItem(cartProvider.cartItems[index], screenWidth, screenHeight),
         ),
         SizedBox(height: screenWidth * 0.04),
         Card(
@@ -633,19 +652,11 @@ class _CartPageState extends State<CartPage> {
                   children: [
                     Text(
                       'Total (${cartProvider.cartItems.length} Item${cartProvider.cartItems.length == 1 ? '' : 's'})',
-                      style: TextStyle(
-                        fontSize: screenWidth * 0.045,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
+                      style: TextStyle(fontSize: screenWidth * 0.045, fontWeight: FontWeight.bold, color: Colors.black87),
                     ),
                     Text(
                       '₹${cartProvider.totalPrice.toStringAsFixed(0)}',
-                      style: TextStyle(
-                        fontSize: screenWidth * 0.045,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue[700],
-                      ),
+                      style: TextStyle(fontSize: screenWidth * 0.045, fontWeight: FontWeight.bold, color: Colors.blue[700]),
                     ),
                   ],
                 ),
@@ -671,15 +682,7 @@ class _CartPageState extends State<CartPage> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
             ),
             SizedBox(height: screenHeight * 0.02),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: const Text('Continue Shopping'),
-            ),
+
           ],
         ),
       );
@@ -702,10 +705,7 @@ class _CartPageState extends State<CartPage> {
                   children: [
                     Text(
                       "Delivery Details",
-                      style: TextStyle(
-                        fontSize: screenWidth * 0.045,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: TextStyle(fontSize: screenWidth * 0.045, fontWeight: FontWeight.bold),
                     ),
                     SizedBox(height: fieldSpacing),
                     _buildTextField(
@@ -761,12 +761,7 @@ class _CartPageState extends State<CartPage> {
                             value: _selectedState,
                             isExpanded: true,
                             decoration: _inputDecoration("State"),
-                            items: _states
-                                .map((state) => DropdownMenuItem(
-                              value: state,
-                              child: Text(state),
-                            ))
-                                .toList(),
+                            items: _states.map((state) => DropdownMenuItem(value: state, child: Text(state))).toList(),
                             onChanged: (val) => setState(() => _selectedState = val),
                             validator: (val) => val == null ? "Select a state" : null,
                           ),
@@ -792,9 +787,7 @@ class _CartPageState extends State<CartPage> {
                               itemBuilder: (context, index) {
                                 return ListTile(
                                   title: Text(_predictions[index].description!),
-                                  onTap: () {
-                                    _getPlaceDetails(_predictions[index].placeId!);
-                                  },
+                                  onTap: () => _getPlaceDetails(_predictions[index].placeId!),
                                 );
                               },
                             ),
@@ -823,35 +816,21 @@ class _CartPageState extends State<CartPage> {
                   children: [
                     Text(
                       "Your Order",
-                      style: TextStyle(
-                        fontSize: screenWidth * 0.045,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: TextStyle(fontSize: screenWidth * 0.045, fontWeight: FontWeight.bold),
                     ),
                     SizedBox(height: screenWidth * 0.02),
                     ListView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: cartProvider.cartItems.length,
-                      itemBuilder: (context, index) => _buildCartItem(
-                        cartProvider.cartItems[index],
-                        screenWidth,
-                        screenHeight,
-                      ),
+                      itemBuilder: (context, index) => _buildCartItem(cartProvider.cartItems[index], screenWidth, screenHeight),
                     ),
                     const Divider(),
-                    _buildPriceRow(
-                      "Subtotal:",
-                      "₹${cartProvider.totalPrice.toStringAsFixed(0)}",
-                    ),
-                    SizedBox(height: screenWidth * 0.02 / 2),
+                    _buildPriceRow("Subtotal:", "₹${cartProvider.totalPrice.toStringAsFixed(0)}"),
+                    SizedBox(height: screenWidth * 0.01),
                     _buildPriceRow("Shipping:", "₹0"),
                     const Divider(),
-                    _buildPriceRow(
-                      "Total",
-                      "₹${cartProvider.totalPrice.toStringAsFixed(0)}",
-                      isBold: true,
-                    ),
+                    _buildPriceRow("Total", "₹${cartProvider.totalPrice.toStringAsFixed(0)}", isBold: true),
                   ],
                 ),
               ),
@@ -878,28 +857,17 @@ class _CartPageState extends State<CartPage> {
                 children: [
                   Text(
                     'Order Summary',
-                    style: TextStyle(
-                      fontSize: screenWidth * 0.045,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: screenWidth * 0.045, fontWeight: FontWeight.bold),
                   ),
                   SizedBox(height: screenWidth * 0.02),
                   ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: cartProvider.cartItems.length,
-                    itemBuilder: (context, index) => _buildCartItem(
-                      cartProvider.cartItems[index],
-                      screenWidth,
-                      screenHeight,
-                    ),
+                    itemBuilder: (context, index) => _buildCartItem(cartProvider.cartItems[index], screenWidth, screenHeight),
                   ),
                   const Divider(),
-                  _buildPriceRow(
-                    "Total",
-                    "₹${cartProvider.totalPrice.toStringAsFixed(0)}",
-                    isBold: true,
-                  ),
+                  _buildPriceRow("Total", "₹${cartProvider.totalPrice.toStringAsFixed(0)}", isBold: true),
                 ],
               ),
             ),
@@ -915,13 +883,9 @@ class _CartPageState extends State<CartPage> {
                 children: [
                   Text(
                     'Payment Method',
-                    style: TextStyle(
-                      fontSize: screenWidth * 0.045,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: screenWidth * 0.045, fontWeight: FontWeight.bold),
                   ),
                   SizedBox(height: screenWidth * 0.02),
-
                   RadioListTile<String>(
                     title: const Text('Cash on Delivery'),
                     value: 'Cash on Delivery',
@@ -945,17 +909,11 @@ class _CartPageState extends State<CartPage> {
       children: [
         Text(
           label,
-          style: TextStyle(
-            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-            fontSize: MediaQuery.of(context).size.width * 0.04,
-          ),
+          style: TextStyle(fontWeight: isBold ? FontWeight.bold : FontWeight.normal, fontSize: MediaQuery.of(context).size.width * 0.04),
         ),
         Text(
           value,
-          style: TextStyle(
-            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-            fontSize: MediaQuery.of(context).size.width * 0.04,
-          ),
+          style: TextStyle(fontWeight: isBold ? FontWeight.bold : FontWeight.normal, fontSize: MediaQuery.of(context).size.width * 0.04),
         ),
       ],
     );
@@ -993,17 +951,6 @@ class _CartPageState extends State<CartPage> {
         onChanged: onChanged,
         decoration: _inputDecoration(label).copyWith(suffixIcon: suffixIcon),
       ),
-    );
-  }
-
-  void showToast(String message) {
-    Fluttertoast.showToast(
-      msg: message,
-      toastLength: Toast.LENGTH_SHORT,
-      gravity: ToastGravity.BOTTOM,
-      backgroundColor: Colors.red,
-      textColor: Colors.white,
-      fontSize: 14.0,
     );
   }
 }
