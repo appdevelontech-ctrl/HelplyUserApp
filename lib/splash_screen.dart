@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import 'controllers/user_controller.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -19,13 +18,14 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
+
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    _scaleAnimation = Tween<double>(begin: 0.9, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOutBack),
     );
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -34,7 +34,7 @@ class _SplashScreenState extends State<SplashScreen>
 
     _animationController.forward();
 
-    // Check login status after animation
+    // Delay to check login status
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) {
         final userController =
@@ -52,24 +52,45 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // Full screen image
-        Image.asset(
-          "assets/images/splash.jpeg",
-          fit: BoxFit.cover, // <-- cover poori screen fill karega
-        ),
-        // Overlay
-        Container(
-          color: Colors.black.withOpacity(0.3),
-        ),
-        // Loading indicator
-        const Center(
-          child: CircularProgressIndicator(color: Colors.white),
-        ),
-      ],
+    final size = MediaQuery.of(context).size;
+
+    return Scaffold(
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Background image that fits the screen
+          Positioned.fill(
+            child: Image.asset(
+              "assets/images/splash.jpeg",
+              fit: BoxFit.cover, // fills entire screen, keeping aspect ratio
+            ),
+          ),
+
+          // Semi-transparent overlay
+          Container(
+            color: Colors.black.withOpacity(0.4),
+          ),
+
+          // Animated logo or text (optional)
+          Center(
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: ScaleTransition(
+                scale: _scaleAnimation,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Add your logo if needed
+                    // Image.asset("assets/images/logo.png", height: size.height * 0.2),
+                    const SizedBox(height: 16),
+                    const CircularProgressIndicator(color: Colors.white),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
-

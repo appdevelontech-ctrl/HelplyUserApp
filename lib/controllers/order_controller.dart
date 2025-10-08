@@ -70,7 +70,7 @@ class OrderController with ChangeNotifier {
     notifyListeners();
 
     try {
-      await EasyLoading.show(status: 'Loading order details...');
+
       final prefs = await SharedPreferences.getInstance();
       final userId = prefs.getString('userId');
       if (userId == null) throw Exception('User ID not found');

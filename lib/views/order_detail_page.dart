@@ -6,6 +6,9 @@ import '../services/api_services.dart';
 import '../models/order_model.dart';
 import 'dart:io';
 import 'dart:convert';
+import 'package:open_filex/open_filex.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:file_saver/file_saver.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:path_provider/path_provider.dart';
@@ -36,84 +39,214 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     super.initState();
     _fetchOrderDetails();
   }
-
   Future<void> _fetchOrderDetails() async {
-    final cachedOrder = widget.orderController.getOrderDetails(widget.orderId);
-    if (cachedOrder == null || cachedOrder.id != widget.orderId) {
-      if (widget.orderController.isOrderDetailsLoading) return;
+    // Skip checking cached data to ensure fresh API call
+    if (widget.orderController.isOrderDetailsLoading) return;
 
-      try {
-        await EasyLoading.show(status: 'Loading order details...');
-        await widget.orderController.fetchOrderDetails(widget.orderId);
-        await EasyLoading.dismiss();
-      } catch (e) {
-        setState(() {
-          _errorMessage = e.toString();
-          if (e.toString().contains('Status code: 404')) {
-            _errorMessage = 'Order not found. Please check the order ID or contact support.';
-          } else {
-            _errorMessage = 'Failed to load order details: $_errorMessage';
-          }
-        });
-        await EasyLoading.showError(_errorMessage!);
-        await EasyLoading.dismiss();
-      }
+    try {
+      await EasyLoading.show(status: 'Loading order details...');
+      // Always fetch fresh data from the API
+      await widget.orderController.fetchOrderDetails(widget.orderId);
+      await EasyLoading.dismiss();
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString();
+        if (e.toString().contains('Status code: 404')) {
+          _errorMessage = 'Order not found. Please check the order ID or contact support.';
+        } else {
+          _errorMessage = 'Failed to load order details: $_errorMessage';
+        }
+      });
+      await EasyLoading.showError(_errorMessage!);
+      await EasyLoading.dismiss();
     }
   }
+
   Future<void> _downloadInvoice(String invoiceId) async {
     try {
-      print('Downloading invoice for ID: $invoiceId');
-
-      // Show loading
-      await EasyLoading.show(status: 'Downloading invoice...');
+      await EasyLoading.show(status: 'Downloading...');
 
       final url = '${ApiServices.baseUrl}/download-invoice-order';
+      print('🧾 Downloading invoice for ID: $invoiceId');
+      print('➡️ Request URL: $url');
+
       final response = await http.post(
         Uri.parse(url),
         headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/pdf', // Important: expecting PDF
+          "Content-Type": "application/json",
+          "Accept": "application/pdf",
         },
-        body: jsonEncode({"invoiceId": invoiceId}),
+        body: json.encode({"invoiceId": invoiceId}),
       );
 
-      print('Status Code: ${response.statusCode}');
+      print('📥 Status Code: ${response.statusCode}');
 
       if (response.statusCode == 200) {
-        // Save PDF to device
         final directory = await getApplicationDocumentsDirectory();
         final filePath = '${directory.path}/invoice_$invoiceId.pdf';
         final file = File(filePath);
 
         await file.writeAsBytes(response.bodyBytes);
-        print('Invoice saved at: $filePath');
+        print('✅ Invoice saved at: $filePath');
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Invoice downloaded to $filePath')),
+        if (!mounted) return;
+
+        EasyLoading.dismiss();
+
+        // Show action sheet with options
+        showModalBottomSheet(
+          context: context,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          builder: (_) {
+            return Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Wrap(
+                runSpacing: 10,
+                children: [
+                  Center(
+                    child: Text(
+                      'Invoice Downloaded',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(Icons.print, color: Colors.blue),
+                    title: const Text('Print Invoice'),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await OpenFilex.open(filePath);
+                    },
+                  ),
+
+                  ListTile(
+                    leading: const Icon(Icons.share, color: Colors.deepPurple),
+                    title: const Text('Share Invoice'),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await Share.shareXFiles([XFile(filePath)], text: 'Invoice PDF');
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
         );
-
-        // Open PDF
-       // await OpenFile.open(filePath);
-
-        await EasyLoading.showSuccess('Invoice downloaded successfully');
       } else {
-        print('Failed with status: ${response.statusCode}');
+        EasyLoading.dismiss();
+        print('❌ Failed: ${response.statusCode}');
+        print('🧠 Response: ${response.body}');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to download invoice (${response.statusCode})')),
         );
-        await EasyLoading.showError('Failed to download invoice');
       }
     } catch (e) {
-      print('Exception: $e');
+      EasyLoading.dismiss();
+      print('💥 Exception: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error downloading invoice: $e')),
       );
-      await EasyLoading.showError('Error downloading invoice');
-    } finally {
-      await EasyLoading.dismiss();
     }
   }
 
+  Future<void> _downloadInvoiceForVendor(String invoiceId) async {
+    try {
+      await EasyLoading.show(status: 'Downloading...');
+
+      final url = '${ApiServices.baseUrl}/download-invoice-order-vendor';
+      print('🧾 Downloading invoice for ID: $invoiceId');
+      print('➡️ Request URL: $url');
+
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/pdf",
+        },
+        body: json.encode({"invoiceId": invoiceId}),
+      );
+
+      print('📥 Status Code: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final directory = await getApplicationDocumentsDirectory();
+        final filePath = '${directory.path}/invoice_$invoiceId.pdf';
+        final file = File(filePath);
+
+        await file.writeAsBytes(response.bodyBytes);
+        print('✅ Invoice saved at: $filePath');
+
+        if (!mounted) return;
+
+        EasyLoading.dismiss();
+
+        // Show action sheet with options
+        showModalBottomSheet(
+          context: context,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          builder: (_) {
+            return Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Wrap(
+                runSpacing: 10,
+                children: [
+                  Center(
+                    child: Text(
+                      'Invoice Downloaded',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(Icons.print, color: Colors.blue),
+                    title: const Text('Print Invoice'),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await OpenFilex.open(filePath);
+                    },
+                  ),
+
+                  ListTile(
+                    leading: const Icon(Icons.share, color: Colors.deepPurple),
+                    title: const Text('Share Invoice'),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await Share.shareXFiles([XFile(filePath)], text: 'Invoice PDF');
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      } else {
+        EasyLoading.dismiss();
+        print('❌ Failed: ${response.statusCode}');
+        print('🧠 Response: ${response.body}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to download invoice (${response.statusCode})')),
+        );
+      }
+    } catch (e) {
+      EasyLoading.dismiss();
+      print('💥 Exception: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error downloading invoice: $e')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -197,17 +330,34 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                     const SizedBox(height: 16),
                     if (order.items.isNotEmpty) _buildItemsList(context, order),
                     const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => _downloadInvoice(order.id),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: const Text(
-                        'Download Invoice',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
-                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        ElevatedButton(
+                          onPressed: () => _downloadInvoice(order.id),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blueAccent,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: const Text(
+                            'Download Invoice',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        ElevatedButton(
+                          onPressed: () => _downloadInvoiceForVendor(order.id),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: const Text(
+                            'Download Vendor Invoice',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    )
                   ],
                 ),
               ),

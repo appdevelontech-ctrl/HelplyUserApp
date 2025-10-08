@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'dart:convert';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
+import 'package:http/http.dart' as http;
 import '../controllers/user_controller.dart';
 import '../models/user.dart';
 
@@ -23,10 +25,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late TextEditingController _addressController;
   late TextEditingController _stateController;
   late TextEditingController _pincodeController;
+  late TextEditingController _passwordController;
+  late TextEditingController _confirmPasswordController;
   String _gender = '1';
   DateTime? _dob;
   XFile? _profileImage;
   final _formKey = GlobalKey<FormState>();
+  final _passwordFormKey = GlobalKey<FormState>();
   final ImagePicker _picker = ImagePicker();
   String? _errorMessage;
 
@@ -45,6 +50,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _addressController = TextEditingController(text: user?.address ?? '');
     _stateController = TextEditingController(text: user?.state ?? '');
     _pincodeController = TextEditingController(text: user?.pincode ?? '');
+    _passwordController = TextEditingController();
+    _confirmPasswordController = TextEditingController();
     _gender = user?.gender ?? '1';
     _dob = user?.dob != null ? DateTime.tryParse(user!.dob!) : null;
   }
@@ -95,6 +102,129 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _changePassword() async {
+    if (_passwordFormKey.currentState!.validate()) {
+      await EasyLoading.show(status: 'Updating password...');
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final userId = prefs.getString('userId') ?? '';
+        if (userId.isEmpty) {
+          await EasyLoading.showError('User ID not found. Please log in again.');
+          return;
+        }
+
+        final response = await http.put(
+          Uri.parse('https://backend-olxs.onrender.com/update-profile/$userId'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'password': _passwordController.text.trim(),
+            'password2': _confirmPasswordController.text.trim(),
+          }),
+        );
+
+        print("Response is: ${response.body}");
+        if (response.statusCode == 200) {
+          await EasyLoading.showSuccess('Password updated successfully');
+          _passwordController.clear();
+          _confirmPasswordController.clear();
+          Navigator.of(context).pop();
+        } else {
+          await EasyLoading.showError('Failed to update password: ${response.body}');
+        }
+      } catch (e) {
+        await EasyLoading.showError('Failed to update password: $e');
+        debugPrint('❌ Error updating password: $e');
+      }
+    }
+  }
+
+  void _showChangePasswordDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xff000428),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text(
+            'Change Password',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          content: Form(
+            key: _passwordFormKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: _passwordController,
+                  style: const TextStyle(color: Colors.white),
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'New Password',
+                    labelStyle: const TextStyle(color: Colors.white70),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.1),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter a new password';
+                    }
+                    if (value.length < 6) {
+                      return 'Password must be at least 6 characters';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _confirmPasswordController,
+                  style: const TextStyle(color: Colors.white),
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'Confirm Password',
+                    labelStyle: const TextStyle(color: Colors.white70),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.1),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please confirm your password';
+                    }
+                    if (value != _passwordController.text) {
+                      return 'Passwords do not match';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueAccent,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: _changePassword,
+              child: const Text('Update', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     _usernameController.dispose();
@@ -103,6 +233,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _addressController.dispose();
     _stateController.dispose();
     _pincodeController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -162,38 +294,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
         if (_errorMessage != null) {
           return Scaffold(
-              body: RefreshIndicator(
-                onRefresh: _refreshProfile,
-                color: Colors.blueAccent,
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  child: SizedBox(
-                    height: size.height,
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            _errorMessage!,
-                            style: const TextStyle(fontSize: 16, color: Colors.red),
-                            textAlign: TextAlign.center,
+            body: RefreshIndicator(
+              onRefresh: _refreshProfile,
+              color: Colors.blueAccent,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: SizedBox(
+                  height: size.height,
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          _errorMessage!,
+                          style: const TextStyle(fontSize: 16, color: Colors.red),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blueAccent,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blueAccent,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            onPressed: _refreshProfile,
-                            child: const Text('Retry', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                          ),
-                        ],
-                      ),
+                          onPressed: _refreshProfile,
+                          child: const Text('Retry', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-
               ),
+            ),
           );
         }
 
@@ -360,6 +491,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           style: TextStyle(
                             fontSize: size.width * 0.04,
                             color: Colors.white70,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blueAccent,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: _showChangePasswordDialog,
+                          child: const Text(
+                            'Change Password',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                           ),
                         ),
                         const SizedBox(height: 24),

@@ -24,7 +24,7 @@ class HomeController extends ChangeNotifier {
 
   final List<Offer> bestOffers = [
     Offer(
-      title: "Maid Help Service",
+      title: "Help Service",
       subtitle: "Daily help for household tasks",
       imageUrl: "https://backend-olxs.onrender.com/uploads/new/image-1756536070057.webp",
     ),

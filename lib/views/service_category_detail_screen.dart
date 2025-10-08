@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_html/flutter_html.dart'; // Add this import
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import '../controllers/service_category_detail_controller.dart';
@@ -20,8 +21,7 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) =>
-          ServiceCategoryDetailController()
-            ..fetchCategoryDetails(slug, location),
+      ServiceCategoryDetailController()..fetchCategoryDetails(slug, location),
       child: Consumer<ServiceCategoryDetailController>(
         builder: (context, controller, child) {
           if (controller.isLoading) {
@@ -31,8 +31,7 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
             );
           }
 
-          if (controller.errorMessage != null ||
-              controller.mainCategory == null) {
+          if (controller.errorMessage != null || controller.mainCategory == null) {
             return Scaffold(
               appBar: _buildAppBar("Error"),
               body: Center(
@@ -104,9 +103,22 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
                   const SizedBox(height: 6),
 
                   /// 🔹 Description
-                  Text(
-                    mainCategory.description,
-                    style: TextStyle(color: Colors.grey[700], fontSize: 14),
+                  Html(
+                    data: mainCategory.description,
+                    style: {
+                      "p": Style(
+                        fontSize: FontSize(14),
+                        color: Colors.grey[700],
+                      ),
+                      "h2": Style(
+                        fontSize: FontSize(18),
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue[800],
+                      ),
+                      "strong": Style(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    },
                   ),
                   const SizedBox(height: 12),
 
@@ -119,10 +131,7 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
                         size: 20,
                       ),
                       const SizedBox(width: 4),
-                      Text(
-                        '4.8 (89% bookings)',
-                        style: TextStyle(color: Colors.blue[700], fontSize: 14),
-                      ),
+
                     ],
                   ),
                   const SizedBox(height: 12),

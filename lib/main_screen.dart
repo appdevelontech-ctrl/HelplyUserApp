@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:user_app/controllers/home_conroller.dart';
 import 'package:user_app/controllers/location_controller.dart';
 import 'package:user_app/controllers/cart_provider.dart';
@@ -330,13 +329,13 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                     username,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: Colors.black,
                       fontSize: 18,
                     ),
                   ),
                   accountEmail: Text(
                     email.isNotEmpty ? email : phone,
-                    style: const TextStyle(color: Colors.white70, fontSize: 14),
+                    style: const TextStyle(color: Colors.black54, fontSize: 14),
                   ),
                   currentAccountPicture: CircleAvatar(
                     backgroundImage: NetworkImage(
@@ -345,7 +344,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                   ),
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Color(0xffa94ee7), Color(0xff2a5298)],
+                      colors: [Color(0xff004e92), Color(0xff000428)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -414,7 +413,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                     iconColor: Colors.redAccent,
                     textColor: Colors.redAccent,
                     onTap: () async {
-                      Navigator.pop(context); // Close drawer
+                      Navigator.pop(context);
                       final confirmed = await _showModernDeleteAccountDialog(context);
                       if (confirmed) {
                         final userController = Provider.of<UserController>(context, listen: false);
@@ -445,7 +444,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                 ],
               ),
             ),
-            const Divider(color: Colors.white54, thickness: 1),
+            const Divider(color: Colors.grey, thickness: 1),
             ListTile(
               leading: const Icon(Icons.logout, color: Colors.redAccent),
               title: const Text(
@@ -687,8 +686,8 @@ class DrawerTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(icon, color: iconColor ?? Colors.white, size: 22),
-      title: Text(title, style: TextStyle(color: textColor ?? Colors.white, fontWeight: FontWeight.w600, fontSize: 15)),
+      leading: Icon(icon, color: iconColor ?? Colors.black, size: 22),
+      title: Text(title, style: TextStyle(color: textColor ?? Colors.black, fontWeight: FontWeight.w600, fontSize: 15)),
       onTap: onTap,
       horizontalTitleGap: 0,
     );

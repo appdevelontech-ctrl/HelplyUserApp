@@ -45,7 +45,8 @@
     equatable: ^2.0.7
     open_filex: ^4.3.4
     url_launcher: ^6.3.0
-
+    share_plus: ^10.0.2
+    file_saver: ^0.2.12
 
     geolocator: ^10.1.1
     google_maps_flutter: 2.5.3

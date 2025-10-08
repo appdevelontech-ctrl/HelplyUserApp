@@ -14,7 +14,7 @@ class SocketController with ChangeNotifier {
   bool _isDisposed = false;
   final List<Map<String, dynamic>> _pendingMessages = [];
   int _reconnectionAttempts = 0;
-  static const int _maxReconnectionAttempts = 5;
+  static const int _maxReconnectionAttempts = 9999;
 
   final Set<String> _liveOrders = {};
   OrderController? orderController;
