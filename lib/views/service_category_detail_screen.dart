@@ -122,19 +122,6 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
 
-                  /// 🔹 Rating
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.star,
-                        color: Colors.orangeAccent,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 4),
-
-                    ],
-                  ),
-                  const SizedBox(height: 12),
 
                   /// 🔹 Action Button
                   SizedBox(

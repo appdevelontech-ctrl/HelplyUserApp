@@ -40,13 +40,10 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     _fetchOrderDetails();
   }
   Future<void> _fetchOrderDetails() async {
-    // Skip checking cached data to ensure fresh API call
-    if (widget.orderController.isOrderDetailsLoading) return;
-
     try {
       await EasyLoading.show(status: 'Loading order details...');
-      // Always fetch fresh data from the API
-      await widget.orderController.fetchOrderDetails(widget.orderId);
+      // Force fetch fresh data (ignore cache)
+      await widget.orderController.fetchOrderDetails(widget.orderId, forceRefresh: true);
       await EasyLoading.dismiss();
     } catch (e) {
       setState(() {

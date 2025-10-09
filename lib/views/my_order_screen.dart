@@ -31,29 +31,26 @@ class _UserOrdersPageState extends State<UserOrdersPage> {
     super.initState();
     _initialize();
   }
-
   Future<void> _initialize() async {
     if (_isInitialized) return;
     _isInitialized = true;
 
-    // Access providers safely
     final socketController = context.read<SocketController>();
     final orderController = context.read<OrderController>();
 
-    // Attach socket
     socketController.attachOrderController(orderController);
     socketController.connect();
 
-    // Fetch orders
-    await _fetchOrdersAndMerge(orderController);
+    // Force refresh orders every time page opens
+    await _fetchOrdersAndMerge(orderController, forceRefresh: true);
   }
 
-  Future<void> _fetchOrdersAndMerge(OrderController orderController) async {
+  Future<void> _fetchOrdersAndMerge(OrderController orderController, {bool forceRefresh = false}) async {
     await EasyLoading.show(status: 'Loading orders...');
     await _loadMaidInfo();
 
     try {
-      await orderController.fetchOrders();
+      await orderController.fetchOrders(forceRefresh: forceRefresh); // force fetch
       _mergeSavedMaidInfo(orderController.orders);
       if (mounted) await EasyLoading.dismiss();
     } catch (e) {
