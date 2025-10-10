@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:async';
 import 'package:user_app/controllers/home_conroller.dart';
 import 'package:user_app/controllers/location_controller.dart';
 import 'package:user_app/controllers/cart_provider.dart';
@@ -13,6 +14,8 @@ import 'package:user_app/views/cartpage.dart';
 import 'package:user_app/views/terms_condition_screen.dart';
 import 'package:user_app/views/profile_screen.dart';
 
+import 'controllers/order_controller.dart';
+
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -23,7 +26,9 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateMixin {
   int _currentIndex = 0;
   late AnimationController _animationController;
-
+  ScrollController? _scrollController; // Make nullable to avoid late initialization issues
+  Timer? _scrollTimer; // Timer for auto-scrolling
+  bool _scrollForward = true; // Track scrolling direction
   final List<GlobalKey<NavigatorState>> _navigatorKeys = [
     GlobalKey<NavigatorState>(),
     GlobalKey<NavigatorState>(),
@@ -40,7 +45,48 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
       duration: const Duration(seconds: 2),
     )..repeat();
     _initScreens();
+    // Fetch orders and start auto-scrolling after orders are fetched
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<OrderController>(context, listen: false).fetchOrders().then((_) {
+        _startAutoScroll();
+      });
+    });
   }
+  void _startAutoScroll() {
+    // Cancel any existing timer to avoid duplicates
+    _scrollTimer?.cancel();
+    _scrollTimer = Timer.periodic(const Duration(milliseconds: 300), (timer) {
+      if (_scrollController?.hasClients ?? false) {
+        final maxExtent = _scrollController!.position.maxScrollExtent;
+        final currentOffset = _scrollController!.offset;
+
+        if (_scrollForward) {
+          // Scroll right
+          if (currentOffset >= maxExtent) {
+            _scrollForward = false; // Reverse direction at the end
+          } else {
+            _scrollController!.animateTo(
+              currentOffset + 50, // Scroll by 50 pixels
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.linear,
+            );
+          }
+        } else {
+          // Scroll left
+          if (currentOffset <= 0) {
+            _scrollForward = true; // Reverse direction at the start
+          } else {
+            _scrollController!.animateTo(
+              currentOffset - 50, // Scroll back by 50 pixels
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.linear,
+            );
+          }
+        }
+      }
+    });
+  }
+
 
   void _initScreens() {
     _screens = [
@@ -52,6 +98,8 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
 
   @override
   void dispose() {
+    _scrollTimer?.cancel(); // Cancel the timer
+    _scrollController?.dispose(); // Dispose ScrollController
     _animationController.dispose();
     super.dispose();
   }
@@ -128,7 +176,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                   child: Image.network(
                     "https://backend-olxs.onrender.com/uploads/new/image-1755174201972.webp",
                     height: 20,
-                    width: 100,
+                    width: 115,
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => const Icon(Icons.error, color: Colors.white),
                   ),
@@ -196,7 +244,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                       },
                     ),
                   ),
-                )
+                ),
               ],
             ),
             actions: [
@@ -218,11 +266,119 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
           ),
         ),
         drawer: _buildDrawer(context),
-        body: Stack(
+        body:
+        Column(
           children: [
-            _buildOffstageNavigator(0),
-            _buildOffstageNavigator(1),
-            _buildOffstageNavigator(2),
+            // Horizontally scrollable orders section
+            Consumer<OrderController>(
+              builder: (context, orderController, _) {
+                // Filter orders to show only those with status 2 (accepted) or 5 (started)
+                final orders = orderController.orders.where((order) => [2, 5].contains(order.status)).toList();
+                if (orders.isEmpty) {
+                  return orderController.isOrdersLoading
+                      ? Center(child: ModernLoader(animationController: _animationController))
+                      : const SizedBox.shrink();
+                }
+                // Ensure _scrollController is initialized before using it
+                if (_scrollController == null) {
+                  _scrollController = ScrollController();
+                  // Restart auto-scrolling after initialization
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    _startAutoScroll();
+                  });
+                }
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    // Responsive dimensions based on screen width
+                    final screenWidth = MediaQuery.of(context).size.width;
+                    final cardWidth = (screenWidth * 0.15).clamp(50.0, 60.0); // Keep width as is
+                    final cardHeight = (screenWidth * 0.1).clamp(30.0, 40.0); // Reduced height (from 40–50px)
+                    final fontSizeOrderId = (screenWidth * 0.02).clamp(7.0, 8.0); // Smaller Order ID font
+                    final fontSizeOtp = (screenWidth * 0.025).clamp(8.0, 10.0); // Smaller OTP font
+                    final verticalMargin = (screenWidth * 0.01).clamp(3.0, 4.0); // Reduced margin
+                    final rightMargin = (screenWidth * 0.01).clamp(3.0, 4.0); // Reduced card spacing
+                    final padding = (screenWidth * 0.01).clamp(3.0, 4.0); // Reduced padding
+
+                    return Container(
+                      height: cardHeight,
+                      margin: EdgeInsets.symmetric(vertical: verticalMargin, horizontal: 4),
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        controller: _scrollController, // Attach ScrollController
+                        itemCount: orders.length,
+                        itemBuilder: (context, index) {
+                          final order = orders[index];
+                          return Container(
+                            width: cardWidth,
+                            margin: EdgeInsets.only(right: rightMargin),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xff0052cc), Color(0xff1e3c72)], // Vibrant gradient
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(6), // Smaller corners
+                              border: Border.all(color: Colors.white.withOpacity(0.2), width: 0.5),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 3, // Smaller shadow
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: EdgeInsets.all(padding),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'ID: ${order.orderId}',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: fontSizeOrderId,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  SizedBox(height: padding * 0.4), // Reduced spacing
+                                  Container(
+                                    padding: EdgeInsets.symmetric(horizontal: padding * 0.5, vertical: padding * 0.2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(3), // Smaller OTP background radius
+                                    ),
+                                    child: Text(
+                                      '${order.otp ?? 'N/A'}',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: fontSizeOtp,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+            // Existing stack of navigators
+            Expanded(
+              child: Stack(
+                children: [
+                  _buildOffstageNavigator(0),
+                  _buildOffstageNavigator(1),
+                  _buildOffstageNavigator(2),
+                ],
+              ),
+            ),
           ],
         ),
         bottomNavigationBar: Consumer<CartProvider>(
@@ -234,7 +390,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                 topRight: Radius.circular(20),
               ),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -2))
+                BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, -2)),
               ],
             ),
             child: ClipRRect(
@@ -344,7 +500,7 @@ class _MainScreenState extends State<MainScreen> with SingleTickerProviderStateM
                   ),
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Color(0xff004e92), Color(0xff000428)],
+                      colors: [Color(0xff306694), Color(0xff9e5ccb)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),

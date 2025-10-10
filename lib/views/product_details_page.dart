@@ -5,6 +5,9 @@ import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
+import 'package:http/http.dart' as http;
+import 'package:user_app/services/api_services.dart';
+import 'dart:convert';
 import '../controllers/product_detail_controller.dart';
 import '../controllers/cart_provider.dart';
 import '../main_screen.dart';
@@ -22,17 +25,76 @@ class ProductDetailsPage extends StatefulWidget {
 }
 
 class _ProductDetailsPageState extends State<ProductDetailsPage> {
+  final _formKey = GlobalKey<FormState>();
+  double _selectedRating = 1.0; // Changed to double for slider
+  final TextEditingController _commentController = TextEditingController();
+  List<Map<String, dynamic>> _productRatings = [];
+
   @override
   void initState() {
     super.initState();
-    // Fetch product details is already handled by ChangeNotifierProvider
+    // Fetch ratings will be called after product details are loaded
+  }
+
+  Future<void> _fetchProductRatings(String productId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('${ApiServices.baseUrl}/view-product-rating/$productId'),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success']) {
+          setState(() {
+            _productRatings = List<Map<String, dynamic>>.from(data['productRatings']);
+          });
+        }
+      } else {
+        await EasyLoading.showError('Failed to fetch ratings');
+      }
+    } catch (e) {
+      await EasyLoading.showError('Error fetching ratings: $e');
+    }
+  }
+
+  Future<void> _submitRating(String userId, String productId) async {
+    if (!_formKey.currentState!.validate()) return;
+
+    try {
+      await EasyLoading.show(status: 'Submitting rating...');
+      final response = await http.post(
+        Uri.parse('${ApiServices.baseUrl}/add-rating'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'rating': _selectedRating.round(), // Convert to integer for API
+          'comment': _commentController.text,
+          'userId': userId,
+          'productId': productId,
+        }),
+      );
+
+      print("Response is: ${response.body}");
+
+      if (response.statusCode == 200) {
+        await EasyLoading.showSuccess('Rating submitted successfully');
+        _commentController.clear();
+        setState(() {
+          _selectedRating = 1.0;
+        });
+        await _fetchProductRatings(productId);
+      } else {
+        await EasyLoading.showError('Failed to submit rating');
+      }
+    } catch (e) {
+      await EasyLoading.showError('Error submitting rating: $e');
+    }
   }
 
   Future<void> _refreshProductDetails(ProductDetailController controller) async {
     await EasyLoading.show(status: 'Refreshing product details...');
     await controller.fetchProductDetails(widget.slug);
-    if (controller.errorMessage == null) {
+    if (controller.errorMessage == null && controller.productDetail != null) {
       await EasyLoading.showSuccess('Product details refreshed successfully');
+      await _fetchProductRatings(controller.productDetail!.id);
     }
   }
 
@@ -315,6 +377,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
               final product = controller.productDetail!;
               final cartProvider = Provider.of<CartProvider>(context, listen: false);
 
+              // Fetch ratings after product details are loaded
+              if (_productRatings.isEmpty) {
+                _fetchProductRatings(product.id);
+              }
+
               return Scaffold(
                 appBar: _buildAppBar(product.title),
                 body: SingleChildScrollView(
@@ -526,6 +593,179 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         ),
                       ),
                       const SizedBox(height: 20),
+                      Card(
+                        elevation: 4,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "Rate This Product",
+                                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 16),
+                              Form(
+                                key: _formKey,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Your Rating',
+                                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Slider(
+                                      value: _selectedRating,
+                                      min: 1.0,
+                                      max: 5.0,
+                                      divisions: 4,
+                                      label: _selectedRating.round().toString(),
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _selectedRating = value;
+                                        });
+                                      },
+                                      activeColor: Colors.amber,
+                                      inactiveColor: Colors.grey[300],
+                                    ),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: List.generate(5, (index) {
+                                        return Icon(
+                                          index < _selectedRating.round() ? Icons.star : Icons.star_border,
+                                          color: Colors.amber,
+                                          size: 24,
+                                        );
+                                      }),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    const Text(
+                                      'Your Comment',
+                                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextFormField(
+                                      controller: _commentController,
+                                      maxLines: 3,
+                                      decoration: InputDecoration(
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        hintText: 'Write your review here...',
+                                      ),
+                                      validator: (value) {
+                                        if (value == null || value.isEmpty) {
+                                          return 'Please enter a comment';
+                                        }
+                                        return null;
+                                      },
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: ElevatedButton(
+                                        onPressed: () => _submitRating('USER_ID_HERE', product.id),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.blue[700],
+                                          foregroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        ),
+                                        child: const Text('Submit Rating'),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Card(
+                        elevation: 4,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "Product Reviews",
+                                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 10),
+                              if (_productRatings.isEmpty)
+                                const Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: Text(
+                                    'No reviews yet.',
+                                    style: TextStyle(fontSize: 16, color: Colors.grey),
+                                  ),
+                                )
+                              else
+                                ListView.builder(
+                                  shrinkWrap: true,
+                                  physics: NeverScrollableScrollPhysics(),
+                                  itemCount: _productRatings.length,
+                                  itemBuilder: (context, index) {
+                                    final rating = _productRatings[index];
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                      child: Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 20,
+                                            backgroundColor: Colors.grey[300],
+                                            child: Icon(Icons.person, color: Colors.grey[600], size: 20),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                  children: [
+                                                    Text(
+                                                      rating['username'],
+                                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                                    ),
+                                                    Text(
+                                                      DateFormat('d MMM yyyy').format(DateTime.parse(rating['createdAt'])),
+                                                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Row(
+                                                  children: List.generate(5, (i) {
+                                                    return Icon(
+                                                      i < rating['rating'] ? Icons.star : Icons.star_border,
+                                                      color: Colors.amber,
+                                                      size: 20,
+                                                    );
+                                                  }),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  rating['comment'],
+                                                  style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -588,5 +828,11 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       backgroundColor: Colors.blue[700],
       elevation: 3,
     );
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
   }
 }

@@ -632,39 +632,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       : null,
                                 ),
                                 const Divider(color: Colors.white38),
-                                ProfileInfoRow(
-                                  icon: Icons.calendar_today,
-                                  label: 'Date of Birth',
-                                  value: _dob != null
-                                      ? '${_dob!.day}/${_dob!.month}/${_dob!.year}'
-                                      : 'Not provided',
-                                  isEditing: _isEditing,
-                                  customInput: _isEditing
-                                      ? InkWell(
-                                    onTap: () => _selectDate(context),
-                                    child: InputDecorator(
-                                      decoration: InputDecoration(
-                                        filled: true,
-                                        fillColor: Colors.white.withOpacity(0.1),
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                          borderSide: BorderSide.none,
-                                        ),
-                                        contentPadding: EdgeInsets.symmetric(
-                                          horizontal: size.width * 0.03,
-                                          vertical: size.height * 0.015,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        _dob != null
-                                            ? '${_dob!.day}/${_dob!.month}/${_dob!.year}'
-                                            : 'Select Date',
-                                        style: const TextStyle(color: Colors.white),
-                                      ),
-                                    ),
-                                  )
-                                      : null,
-                                ),
+
                               ],
                             ),
                           ),
