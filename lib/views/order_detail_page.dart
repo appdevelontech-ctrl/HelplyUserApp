@@ -152,99 +152,6 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     }
   }
 
-  Future<void> _downloadInvoiceForVendor(String invoiceId) async {
-    try {
-      await EasyLoading.show(status: 'Downloading...');
-
-      final url = '${ApiServices.baseUrl}/download-invoice-order-vendor';
-      print('🧾 Downloading invoice for ID: $invoiceId');
-      print('➡️ Request URL: $url');
-
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/pdf",
-        },
-        body: json.encode({"invoiceId": invoiceId}),
-      );
-
-      print('📥 Status Code: ${response.statusCode}');
-
-      if (response.statusCode == 200) {
-        final directory = await getApplicationDocumentsDirectory();
-        final filePath = '${directory.path}/invoice_$invoiceId.pdf';
-        final file = File(filePath);
-
-        await file.writeAsBytes(response.bodyBytes);
-        print('✅ Invoice saved at: $filePath');
-
-        if (!mounted) return;
-
-        EasyLoading.dismiss();
-
-        // Show action sheet with options
-        showModalBottomSheet(
-          context: context,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-          ),
-          builder: (_) {
-            return Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Wrap(
-                runSpacing: 10,
-                children: [
-                  Center(
-                    child: Text(
-                      'Invoice Downloaded',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ),
-                  const Divider(),
-                  ListTile(
-                    leading: const Icon(Icons.print, color: Colors.blue),
-                    title: const Text('Print Invoice'),
-                    onTap: () async {
-                      Navigator.pop(context);
-                      await OpenFilex.open(filePath);
-                    },
-                  ),
-
-                  ListTile(
-                    leading: const Icon(Icons.share, color: Colors.deepPurple),
-                    title: const Text('Share Invoice'),
-                    onTap: () async {
-                      Navigator.pop(context);
-                      await Share.shareXFiles([XFile(filePath)], text: 'Invoice PDF');
-                    },
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      } else {
-        EasyLoading.dismiss();
-        print('❌ Failed: ${response.statusCode}');
-        print('🧠 Response: ${response.body}');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to download invoice (${response.statusCode})')),
-        );
-      }
-    } catch (e) {
-      EasyLoading.dismiss();
-      print('💥 Exception: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error downloading invoice: $e')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
@@ -341,18 +248,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                           ),
                         ),
-                        SizedBox(width: 10),
-                        ElevatedButton(
-                          onPressed: () => _downloadInvoiceForVendor(order.id),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          child: const Text(
-                            'Download Vendor Invoice',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                          ),
-                        ),
+
                       ],
                     )
                   ],

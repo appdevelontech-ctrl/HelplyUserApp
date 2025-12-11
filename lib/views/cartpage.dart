@@ -62,44 +62,34 @@ class _CartPageState extends State<CartPage> {
 
   Future<void> _loadUserDetails() async {
     if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      final userController = Provider.of<UserController>(context, listen: false);
       final prefs = await SharedPreferences.getInstance();
       final userId = prefs.getString('userId');
-      if (userId != null && userId.isNotEmpty) {
-        await userController.fetchUserDetails(userId);
-        final updatedPrefs = await SharedPreferences.getInstance();
-        if (mounted) {
-          setState(() {
-            _nameController.text = updatedPrefs.getString('username') ?? '';
-            _phoneController.text = updatedPrefs.getString('phone') ?? '';
-            _emailController.text = updatedPrefs.getString('email') ?? '';
-            _pincodeController.text = updatedPrefs.getString('pincode') ?? '';
-            _addressController.text = updatedPrefs.getString('address') ?? '';
-            final storedState = updatedPrefs.getString('state');
-            _selectedState = _states.contains(storedState) ? storedState : null;
-          });
-        }
-        await EasyLoading.dismiss();
-      } else {
-        throw Exception('User ID not found');
-      }
-    } catch (e) {
+      if (userId == null || userId.isEmpty) throw Exception('Please login first');
+
+      final userController = Provider.of<UserController>(context, listen: false);
+      await userController.fetchUserDetails(userId);
+
+      final updatedPrefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+
       setState(() {
-        _errorMessage = 'Failed to load user details: $e';
+        _nameController.text = updatedPrefs.getString('username') ?? '';
+        _phoneController.text = updatedPrefs.getString('phone') ?? '';
+        _emailController.text = updatedPrefs.getString('email') ?? '';
+        _pincodeController.text = updatedPrefs.getString('pincode') ?? '';
+        _addressController.text = updatedPrefs.getString('address') ?? '';
+        final state = updatedPrefs.getString('state');
+        _selectedState = _states.contains(state) ? state : null;
       });
-      await EasyLoading.showError(_errorMessage!);
-      debugPrint('❌ Error loading user details: $e');
+    } catch (e) {
+      _errorMessage = 'Failed to load details';
+      EasyLoading.showError(_errorMessage!);
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-      await EasyLoading.dismiss();
+      if (mounted) setState(() => _isLoading = false);
+      EasyLoading.dismiss();
     }
   }
 

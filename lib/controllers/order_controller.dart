@@ -34,28 +34,24 @@ class OrderController with ChangeNotifier {
     return false;
   }
 
-  /// Fetch all user orders
   Future<void> fetchOrders({bool forceRefresh = false}) async {
     if (_isDisposed) return;
-    if (_isOrdersLoading && !forceRefresh) return; // Prevent concurrent fetches unless forced
+    if (_isOrdersLoading) return;
 
     _isOrdersLoading = true;
     notifyListeners();
 
     try {
-
       final newOrders = await apiService.fetchUserOrders();
       _orders = newOrders;
-      await EasyLoading.dismiss();
     } catch (e) {
-      // Keep existing orders instead of clearing to prevent UI flicker
-      await EasyLoading.showError('Failed to load orders: $e');
       debugPrint('❌ fetchOrders error: $e');
+    } finally {
+      _isOrdersLoading = false;
+      notifyListeners();
     }
-
-    _isOrdersLoading = false;
-    if (!_isDisposed) notifyListeners();
   }
+
 
   /// Fetch details of a specific order
   Future<void> fetchOrderDetails(String orderId, {bool forceRefresh = false}) async {
@@ -145,6 +141,7 @@ class OrderController with ChangeNotifier {
   }
 
   /// Update order status and maid info from socket
+  /// Update order status and maid info from socket
   Future<void> updateOrderStatusFromSocket(
       String orderId,
       String status,
@@ -160,7 +157,13 @@ class OrderController with ChangeNotifier {
     debugPrint(
         '📡 Socket Update -> orderId: $orderId, status: $status ($statusCode), lat: $lat, lng: $lng, maid: $maidName');
 
-    final index = _orders.indexWhere((o) => o.orderId.toString() == orderId);
+    // ✅ YAHAN PE MAIN BUG THA
+    // Pehle sirf o.orderId (227) se compare kar rahe the,
+    // jabki socket se Mongo ID (6938....) aa rahi hai.
+    final index = _orders.indexWhere(
+          (o) => o.id == orderId || o.orderId.toString() == orderId,
+    );
+
     if (index != -1) {
       _orders[index] = _orders[index].copyWith(
         status: statusCode,
@@ -171,10 +174,15 @@ class OrderController with ChangeNotifier {
         maidEmail: maidEmail,
         updatedAt: DateTime.now().toIso8601String(),
       );
+      debugPrint('✅ OrderController updated for orderId: $orderId');
+    } else {
+      debugPrint('⚠️ Order not found in list for id: $orderId');
     }
 
-    if (_orderDetailsCache[orderId]?.orderId.toString() == orderId) {
-      _orderDetailsCache[orderId] = _orderDetailsCache[orderId]!.copyWith(
+    // details cache update
+    if (_orderDetailsCache.containsKey(orderId)) {
+      final cachedOrder = _orderDetailsCache[orderId]!;
+      _orderDetailsCache[orderId] = cachedOrder.copyWith(
         status: statusCode,
         maidLat: lat,
         maidLng: lng,
@@ -185,7 +193,7 @@ class OrderController with ChangeNotifier {
       );
     }
 
-    // Save full maid info to SharedPreferences
+    // 🔐 per-user maid info save
     await _saveMaidInfoToPrefs(orderId, {
       'maidName': maidName,
       'maidPhone': maidPhone,
@@ -221,11 +229,14 @@ class OrderController with ChangeNotifier {
     }
   }
 
-  /// Save maid info to SharedPreferences
+  /// Save maid info to SharedPreferences (per user)
   Future<void> _saveMaidInfoToPrefs(String orderId, Map<String, dynamic> maidInfo) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final data = prefs.getString('maid_info') ?? '{}';
+      final uid = prefs.getString('userId') ?? 'unknown_user';
+      final key = 'maid_info_$uid';
+
+      final data = prefs.getString(key) ?? '{}';
       Map<String, dynamic> map;
       try {
         map = jsonDecode(data) as Map<String, dynamic>;
@@ -233,13 +244,21 @@ class OrderController with ChangeNotifier {
         debugPrint('❌ Error parsing maid_info: $e');
         map = {};
       }
+
       map[orderId] = maidInfo;
-      await prefs.setString('maid_info', jsonEncode(map));
-      debugPrint('💾 Maid info saved for order $orderId');
+      await prefs.setString(key, jsonEncode(map));
+
+      debugPrint('💾 (USER: $uid) Maid info saved → $orderId → $maidInfo');
     } catch (e) {
       debugPrint('❌ Error saving maid info: $e');
     }
   }
+  void clearOrders() {
+    _orders.clear();
+    _orderDetailsCache.clear();
+    notifyListeners();
+  }
+
 
   /// Clear outdated maid info from SharedPreferences
   Future<void> clearOutdatedMaidInfo({Duration maxAge = const Duration(days: 30)}) async {

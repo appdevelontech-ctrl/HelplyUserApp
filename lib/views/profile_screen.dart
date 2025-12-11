@@ -451,31 +451,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     key: _formKey,
                     child: Column(
                       children: [
-                        // Profile Image
-                        GestureDetector(
-                          onTap: _isEditing ? _pickProfileImage : null,
-                          child: Stack(
-                            alignment: Alignment.bottomRight,
-                            children: [
-                              CircleAvatar(
-                                radius: avatarRadius,
-                                backgroundColor: Colors.white.withOpacity(0.1),
-                                backgroundImage: NetworkImage(
-                                  'https://i.pravatar.cc/150?img=${(user.username ?? 'User').hashCode % 70}',
-                                ) as ImageProvider,
-                              ),
-                              if (_isEditing)
-                                Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: const BoxDecoration(
-                                    color: Colors.orangeAccent,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
-                                ),
-                            ],
-                          ),
+                        CircleAvatar(
+                          radius: avatarRadius,
+                          backgroundColor: Colors.white.withOpacity(0.1),
+                          backgroundImage: const AssetImage('assets/images/profile.png'),
                         ),
+
                         const SizedBox(height: 16),
                         Text(
                           user.username ?? 'User',

@@ -85,9 +85,15 @@ class SocketController with ChangeNotifier {
 
       final orderData = data['order'] as Map<String, dynamic>? ?? {};
       final orderDetails = orderData['orderDetails'] as Map<String, dynamic>? ?? {};
-      final orderId = orderData['orderId']?.toString() ??
-          orderDetails['orderId']?.toString();
-      if (orderId == null) return;
+
+      // yahan se jo aa raha hai, wohi use kar rahe
+      final orderId = (orderData['orderId'] ??
+          orderDetails['orderId'] ??
+          orderData['_id'] ??
+          orderDetails['_id'])
+          .toString();
+
+      if (orderId.isEmpty) return;
 
       final maidLat = _parseDouble(orderData['maidLat']);
       final maidLng = _parseDouble(orderData['maidLng']);
@@ -103,17 +109,12 @@ class SocketController with ChangeNotifier {
 
       print('📡 Received from socket: $maidInfo');
 
-      // Update live orders
+      // live flag
       updateOrderLiveStatus(orderId, true);
 
-      // Call global callback
-      if (onMaidStartedOrder != null) {
-        onMaidStartedOrder!(orderId, maidInfo);
-      }
-
-      // Update OrderController with full maid info
+      // ✅ PEHLE OrderController + prefs update karenge
       if (orderController != null) {
-        orderController!.updateOrderStatusFromSocket(
+        await orderController!.updateOrderStatusFromSocket(
           orderId,
           maidInfo['status'].toString(),
           maidLat,
@@ -124,9 +125,16 @@ class SocketController with ChangeNotifier {
         );
       }
 
-      // Persist maid info globally
+      // ✅ phir apna global storage (per user)
       await _persistMaidInfo(orderId, maidInfo);
+
+      // ✅ AB callback call karo (ab data UI mein ready hai)
+      if (onMaidStartedOrder != null) {
+        print("⚡ REAL-TIME UPDATE for $orderId");
+        onMaidStartedOrder!(orderId, maidInfo);
+      }
     });
+
   }
 
   double _parseDouble(dynamic value) {
@@ -136,6 +144,21 @@ class SocketController with ChangeNotifier {
     if (value is String) return double.tryParse(value) ?? 0.0;
     return 0.0;
   }
+
+  Future<void> clearUserDataOnLogout() async {
+    final prefs = await SharedPreferences.getInstance();
+    final uid = prefs.getString('userId') ?? "unknown_user";
+
+    await prefs.remove("maid_info_$uid"); // 🔥 remove per-user tracking
+
+    _liveOrders.clear();
+    _pendingMessages.clear();
+    orderController?.clearOrders(); // if implemented
+    socket?.disconnect();
+
+    print("🧹 Tracking + socket cleared for user -> $uid");
+  }
+
 
   void _reconnect() {
     if (_reconnectionAttempts < _maxReconnectionAttempts) {
@@ -169,23 +192,35 @@ class SocketController with ChangeNotifier {
   /// Persist maid info for each order using SharedPreferences
   Future<void> _persistMaidInfo(String orderId, Map<String, dynamic> maidInfo) async {
     final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getString('maid_info') ?? '{}';
+    final uid = prefs.getString('userId') ?? 'unknown_user';
+    final key = 'maid_info_$uid';
+
+    final data = prefs.getString(key) ?? '{}';
     final Map<String, dynamic> map = jsonDecode(data);
     map[orderId] = maidInfo;
-    await prefs.setString('maid_info', jsonEncode(map));
+
+    await prefs.setString(key, jsonEncode(map));
     debugPrint('💾 Maid info saved for order $orderId: $maidInfo');
   }
 
   /// Load persisted maid info and update OrderController
   Future<void> _loadPersistedMaidInfo() async {
     if (orderController == null) return;
+
     final prefs = await SharedPreferences.getInstance();
     final data = prefs.getString('maid_info') ?? '{}';
     final Map<String, dynamic> map = jsonDecode(data);
 
+    if (map.isEmpty) return;
+
     map.forEach((orderId, maidInfo) {
       final lat = maidInfo['maidLat'] ?? 0.0;
       final lng = maidInfo['maidLng'] ?? 0.0;
+
+      // 🔥 Restore live status
+      updateOrderLiveStatus(orderId, true);
+
+      // 🔥 Restore to OrderController
       orderController!.updateOrderStatusFromSocket(
         orderId,
         maidInfo['status'].toString(),
@@ -197,8 +232,9 @@ class SocketController with ChangeNotifier {
       );
     });
 
-    debugPrint('📌 Restored maid info from SharedPreferences: $map');
+    debugPrint('📌 Restored maid info + live orders: ${_liveOrders.toString()}');
   }
+
 
   @override
   void dispose() {

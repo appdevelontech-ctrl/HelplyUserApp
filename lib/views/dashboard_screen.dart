@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../controllers/home_conroller.dart';
@@ -79,7 +80,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                                 : "https://backend-olxs.onrender.com/uploads/new/image-1758194895880.webp",
                             width: double.infinity,
                             height: 200,
-                            fit: BoxFit.fill
+                            fit: BoxFit.contain
                             ,
                             placeholder: (context, url) => Shimmer.fromColors(
                               baseColor: Colors.grey[300]!,
@@ -313,17 +314,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                                   "Book trusted house help services anytime and anywhere. Reliable and affordable.",
                                   style: TextStyle(color: Colors.white70),
                                 ),
-                                const SizedBox(height: 12),
-                                ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.orangeAccent,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                  onPressed: () {},
-                                  child: const Text("Book Now"),
-                                ),
+
                               ],
                             ),
                           ),
@@ -411,4 +402,6 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       },
     );
   }
+
+
 }

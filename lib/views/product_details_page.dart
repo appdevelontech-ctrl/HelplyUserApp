@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
@@ -29,12 +30,22 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
   double _selectedRating = 1.0; // Changed to double for slider
   final TextEditingController _commentController = TextEditingController();
   List<Map<String, dynamic>> _productRatings = [];
+  String? userId;
+
+  Future<void> getUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    userId = prefs.getString("userId");
+    print("USERID IS : $userId");
+  }
+
 
   @override
   void initState() {
     super.initState();
-    // Fetch ratings will be called after product details are loaded
+    getUserId();
+
   }
+
 
   Future<void> _fetchProductRatings(String productId) async {
     try {
@@ -97,6 +108,16 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       await _fetchProductRatings(controller.productDetail!.id);
     }
   }
+
+  double getResponsiveWidth(BuildContext context) {
+    double width = MediaQuery.of(context).size.width;
+
+    if (width <= 480) return width * 0.95;         // Mobile
+    if (width <= 800) return width * 0.75;         // Small Tablet
+    if (width <= 1200) return width * 0.55;        // Large Tablet
+    return width * 0.40;                           // Web/Desktop
+  }
+
 
   void _showAddToCartDialog(BuildContext context, ProductDetail product, CartProvider cartProvider) {
     if (cartProvider.cartItems.isNotEmpty) {
@@ -291,31 +312,47 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                           ),
                           const SizedBox(width: 8),
                           ElevatedButton(
-                            onPressed: () async {
-                              if (selectedDate == null || selectedTime == null || selectedDuration.isEmpty) {
-                                EasyLoading.showError('Please select date, time, and duration');
-                                return;
-                              }
+            onPressed: () async {
+            if (selectedDate == null || selectedTime == null || selectedDuration.isEmpty) {
+            EasyLoading.showError('Please select date, time & duration');
+            return;
+            }
 
-                              final cartProduct = product.toProduct(
-                                selectedDate: selectedDate,
-                                selectedTime: selectedTime,
-                                selectedDuration: selectedDuration,
-                                salePrice: calculatedPrice,
-                              );
+            final cartProduct = product.toProduct(
+            selectedDate: selectedDate,
+            selectedTime: selectedTime,
+            selectedDuration: selectedDuration,
+            salePrice: calculatedPrice,
+            );
 
-                              try {
-                                await EasyLoading.show(status: 'Adding to cart...');
-                                await cartProvider.addToCart(cartProduct);
-                                await EasyLoading.showSuccess('Product added to cart');
-                                if (mounted) {
-                                  Navigator.pop(context);
-                                }
-                              } catch (e) {
-                                await EasyLoading.showError('Failed to add to cart: $e');
-                              }
-                            },
-                            child: const Text('Add to Cart'),
+            try {
+            await EasyLoading.show(status: 'Adding to cart...');
+            await cartProvider.addToCart(cartProduct);
+
+            EasyLoading.dismiss(); // remove loader
+
+            if (!mounted) return;
+
+            // show success toast message
+            EasyLoading.showToast(
+            'Added to cart successfully!',
+            toastPosition: EasyLoadingToastPosition.bottom,
+            duration: const Duration(seconds: 2),
+            );
+
+            // Close ALL previous routes & open MainScreen with Cart Tab
+            Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const MainScreen()),
+            (route) => false,
+            );
+
+            } catch (e) {
+            await EasyLoading.showError('Failed to add to cart: $e');
+            }
+            }
+,
+            child: const Text('Add to Cart'),
                           ),
                         ],
                       ),
@@ -666,7 +703,13 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                                     Align(
                                       alignment: Alignment.centerRight,
                                       child: ElevatedButton(
-                                        onPressed: () => _submitRating('USER_ID_HERE', product.id),
+              onPressed: () {
+              if (userId == null) {
+              EasyLoading.showError("⚠ Please login first");
+              return;
+              }
+              _submitRating(userId!, product.id);
+              },
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: Colors.blue[700],
                                           foregroundColor: Colors.white,
@@ -683,89 +726,77 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
                         ),
                       ),
                       const SizedBox(height: 20),
-                      Card(
-                        elevation: 4,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                "Product Reviews",
-                                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                              ),
-                              const SizedBox(height: 10),
-                              if (_productRatings.isEmpty)
-                                const Padding(
-                                  padding: EdgeInsets.all(8.0),
-                                  child: Text(
-                                    'No reviews yet.',
-                                    style: TextStyle(fontSize: 16, color: Colors.grey),
-                                  ),
-                                )
-                              else
-                                ListView.builder(
-                                  shrinkWrap: true,
-                                  physics: NeverScrollableScrollPhysics(),
-                                  itemCount: _productRatings.length,
-                                  itemBuilder: (context, index) {
-                                    final rating = _productRatings[index];
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                                      child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: NeverScrollableScrollPhysics(),
+                        itemCount: _productRatings.length,
+                        itemBuilder: (context, index) {
+                          final rating = _productRatings[index];
+
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8.0),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                CircleAvatar(
+                                  radius: 20,
+                                  backgroundColor: Colors.grey[300],
+                                  child: Icon(Icons.person, color: Colors.grey[600], size: 20),
+                                ),
+                                const SizedBox(width: 12),
+
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
-                                          CircleAvatar(
-                                            radius: 20,
-                                            backgroundColor: Colors.grey[300],
-                                            child: Icon(Icons.person, color: Colors.grey[600], size: 20),
+                                          Text(
+                                            rating['username'] ?? "Unknown User",
+                                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                                           ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Row(
-                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                  children: [
-                                                    Text(
-                                                      rating['username'],
-                                                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                                                    ),
-                                                    Text(
-                                                      DateFormat('d MMM yyyy').format(DateTime.parse(rating['createdAt'])),
-                                                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                                                    ),
-                                                  ],
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Row(
-                                                  children: List.generate(5, (i) {
-                                                    return Icon(
-                                                      i < rating['rating'] ? Icons.star : Icons.star_border,
-                                                      color: Colors.amber,
-                                                      size: 20,
-                                                    );
-                                                  }),
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  rating['comment'],
-                                                  style: TextStyle(fontSize: 14, color: Colors.grey[700]),
-                                                ),
-                                              ],
-                                            ),
+
+                                          Text(
+                                            rating['createdAt'] != null
+                                                ? DateFormat('d MMM yyyy')
+                                                .format(DateTime.parse(rating['createdAt']))
+                                                : "Just now",
+                                            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                                           ),
                                         ],
                                       ),
-                                    );
-                                  },
+
+                                      const SizedBox(height: 4),
+
+                                      Row(
+                                        children: List.generate(5, (i) {
+                                          return Icon(
+                                            i < (rating['rating'] ?? 0)
+                                                ? Icons.star
+                                                : Icons.star_border,
+                                            color: Colors.amber,
+                                            size: 20,
+                                          );
+                                        }),
+                                      ),
+
+                                      const SizedBox(height: 4),
+
+                                      Text(
+                                        rating['comment'] ?? "No comment provided.",
+                                        style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                            ],
-                          ),
-                        ),
-                      ),
+                              ],
+                            ),
+                          );
+                        },
+                      )
+
                     ],
                   ),
                 ),
@@ -817,13 +848,24 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 
   AppBar _buildAppBar(String title) {
     return AppBar(
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back, color: Colors.white),
-        onPressed: () => Navigator.pop(context),
+      leading: Builder(
+        builder: (context) => IconButton(
+          icon: Image.asset(
+            'assets/icons/back.png',
+            width: 24,
+            height: 24,
+            color: Colors.white,
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       title: Text(
         title,
-        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 20),
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+          fontSize: 20,
+        ),
       ),
       backgroundColor: Colors.blue[700],
       elevation: 3,

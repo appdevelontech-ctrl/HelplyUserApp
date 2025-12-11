@@ -16,7 +16,7 @@
   # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
   # In Windows, build-name is used as the major, minor, and patch parts
   # of the product and file versions while build-number is used as the build suffix.
-  version: 1.0.0+1
+  version: 1.0.0+7
 
   environment:
     sdk: ^3.5.1
@@ -95,6 +95,7 @@
     assets:
       - assets/images/
       - assets/icons/back.png
+      - assets/imagesforscreen/
     #   - images/a_dot_ham.jpeg
 
     # An image asset can refer to one or more resolution-specific "variants", see
@@ -126,5 +127,5 @@
     android: true
     ios: true
     adaptive_icon_background: "#ffffff" # or transparent
-    adaptive_icon_foreground: "assets/icons/icon.jpg"
-    image_path: "assets/icons/icon.jpg"
+    adaptive_icon_foreground: "assets/icons/Helply.jpg"
+    image_path: "assets/icons/Helply.jpg"

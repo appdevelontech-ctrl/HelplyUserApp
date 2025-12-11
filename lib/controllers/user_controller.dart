@@ -166,6 +166,9 @@ class UserController extends ChangeNotifier {
         await prefs.setString('token', result['token'] ?? '');
         await prefs.setBool('isLoggedIn', true);
 
+
+
+
         await fetchUserDetails(result['user']['_id']);
         _isLoggedIn = true;
         _isLoading = false;
@@ -234,6 +237,10 @@ class UserController extends ChangeNotifier {
             await prefs.setString('userId', newUserId);
             await prefs.setString('phone', newPhone);
             await prefs.setBool('isLoggedIn', true);
+
+
+
+
 
             await fetchUserDetails(newUserId);
             _isLoggedIn = true;
@@ -537,46 +544,46 @@ class UserController extends ChangeNotifier {
       }
     }
   }
-
   Future<void> checkLoginStatus(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
     final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
 
-    if (isLoggedIn) {
-      final userId = prefs.getString('userId') ?? '';
-      if (userId.isNotEmpty) {
-        try {
-          await fetchUserDetails(userId);
-          _isLoggedIn = true;
-          notifyListeners();
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const MainScreen()),
-          );
-        } catch (e) {
-          _errorMessage = 'Failed to load user details. Please log in again.';
-          EasyLoading.showError('$_errorMessage');
-          await logout();
-          notifyListeners();
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const LoginScreen()),
-          );
-        }
-      } else {
-        await logout();
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
-      }
-    } else {
+    if (!isLoggedIn) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+      return;
+    }
+
+    final userId = prefs.getString('userId');
+    if (userId == null || userId.isEmpty) {
+      await logout();
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+      return;
+    }
+
+    try {
+      await fetchUserDetails(userId);
+      _isLoggedIn = true;
+      notifyListeners();
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const MainScreen()),
+      );
+    } catch (e) {
+      await logout();
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const LoginScreen()),
       );
     }
   }
+
 
   Future<void> logout() async {
     print("🚪 Logging out user...");

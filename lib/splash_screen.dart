@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:user_app/services/storage_service.dart';
+import 'package:user_app/views/auth/login_screen.dart';
+import 'package:user_app/views/onboarding.dart';
 import 'controllers/user_controller.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -11,6 +16,7 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
+
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
   late Animation<double> _fadeAnimation;
@@ -34,14 +40,37 @@ class _SplashScreenState extends State<SplashScreen>
 
     _animationController.forward();
 
-    // Delay to check login status
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        final userController =
-        Provider.of<UserController>(context, listen: false);
-        userController.checkLoginStatus(context);
-      }
-    });
+    _checkNavigation(); // 🚀
+  }
+
+  Future<void> _checkNavigation() async {
+    await Future.delayed(const Duration(seconds: 2));
+
+    bool onboarded = await StorageService.isOnboardingDone();
+    final prefs = await SharedPreferences.getInstance();
+    bool loggedIn = prefs.getBool("isLoggedIn") ?? false;
+
+    // ⛔️ FIRST PRIORITY: Onboarding
+    if (!onboarded) {
+      _goTo(OnboardingScreen());
+      return;
+    }
+
+    // ⛔️ SECOND PRIORITY: Login
+    if (!loggedIn) {
+      _goTo(const LoginScreen());
+      return;
+    }
+
+    // ⛔️ THIRD PRIORITY: If logged in → verify user data
+    final userController = Provider.of<UserController>(context, listen: false);
+    await userController.checkLoginStatus(context);
+  }
+
+
+  void _goTo(Widget page){
+    if(!mounted) return;
+    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => page));
   }
 
   @override
@@ -58,20 +87,16 @@ class _SplashScreenState extends State<SplashScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Background image that fits the screen
           Positioned.fill(
             child: Image.asset(
-              "assets/images/splash.jpeg",
-              fit: BoxFit.cover, // fills entire screen, keeping aspect ratio
+              "assets/images/splash_screen.png",
+              fit: BoxFit.fill
+              ,
             ),
           ),
 
-          // Semi-transparent overlay
-          Container(
-            color: Colors.black.withOpacity(0.4),
-          ),
+          Container(color: Colors.black.withOpacity(0.4)),
 
-          // Animated logo or text (optional)
           Center(
             child: FadeTransition(
               opacity: _fadeAnimation,
@@ -80,8 +105,6 @@ class _SplashScreenState extends State<SplashScreen>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Add your logo if needed
-                    // Image.asset("assets/images/logo.png", height: size.height * 0.2),
                     const SizedBox(height: 16),
                     const CircularProgressIndicator(color: Colors.white),
                   ],

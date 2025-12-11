@@ -35,15 +35,31 @@ class _UserOrdersPageState extends State<UserOrdersPage> {
     if (_isInitialized) return;
     _isInitialized = true;
 
-    final socketController = context.read<SocketController>();
     final orderController = context.read<OrderController>();
+    final socketController = context.read<SocketController>();
+
+    await _loadMaidInfo();
+    await orderController.fetchOrders(forceRefresh: true);
+
+    _mergeSavedMaidInfo(orderController.orders);
 
     socketController.attachOrderController(orderController);
+
+    socketController.onMaidStartedOrder = (orderId, data) async {
+      print("⚡ REAL-TIME UPDATE for $orderId");
+
+      await _loadMaidInfo();                     // refresh saved local tracking
+      _mergeSavedMaidInfo(orderController.orders);
+
+      if (mounted) setState(() {});              // 🔥 UI refresh FIX
+    };
+
     socketController.connect();
 
-    // Force refresh orders every time page opens
-    await _fetchOrdersAndMerge(orderController, forceRefresh: true);
+    if (mounted) setState(() {});
   }
+
+
 
   Future<void> _fetchOrdersAndMerge(OrderController orderController, {bool forceRefresh = false}) async {
     await EasyLoading.show(status: 'Loading orders...');
@@ -57,39 +73,65 @@ class _UserOrdersPageState extends State<UserOrdersPage> {
       if (mounted) await EasyLoading.showError('Failed to load orders: $e');
     }
   }
-
   Future<void> _loadMaidInfo() async {
     final prefs = await SharedPreferences.getInstance();
-    final savedData = prefs.getString('maid_info');
+    final uid = prefs.getString('userId') ?? "unknown_user";
+    final key = "maid_info_$uid";
+
+    final savedData = prefs.getString(key);
+    print("📦 Loaded maid info for user: $uid → $savedData");
+
     if (savedData != null) {
-      try {
-        _maidInfoMap = (jsonDecode(savedData) as Map<String, dynamic>)
-            .map((k, v) => MapEntry(k, Map<String, dynamic>.from(v)));
-      } catch (e) {
-        debugPrint('Error parsing maid_info: $e');
-      }
+      _maidInfoMap = (jsonDecode(savedData) as Map<String, dynamic>)
+          .map((k, v) => MapEntry(k, Map<String, dynamic>.from(v)));
     }
   }
-
   void _mergeSavedMaidInfo(List<Order> orders) {
-    for (int i = 0; i < orders.length; i++) {
-      final saved = _maidInfoMap[orders[i].id];
-      if (saved == null) continue;
-      orders[i] = orders[i].copyWith(
-        maidName: saved['maidName'] ?? orders[i].maidName,
-        maidPhone: saved['maidPhone'] ?? orders[i].maidPhone,
-        maidEmail: saved['maidEmail'] ?? orders[i].maidEmail,
-        maidLat: (saved['maidLat'] as num?)?.toDouble() ?? orders[i].maidLat,
-        maidLng: (saved['maidLng'] as num?)?.toDouble() ?? orders[i].maidLng,
+    debugPrint("🔄 Merging saved tracking with active orders...");
+
+    final orderController = context.read<OrderController>();
+
+    for (var order in orders) {
+      final key = order.id.toString();
+
+      if (!_maidInfoMap.containsKey(key)) {
+        debugPrint("❌ No saved maid data for order → $key");
+        continue;
+      }
+
+      final saved = _maidInfoMap[key]!;
+      debugPrint("✅ Restoring → $key → $saved");
+
+      final updatedOrder = order.copyWith(
+        maidName: saved['maidName'],
+        maidPhone: saved['maidPhone'],
+        maidEmail: saved['maidEmail'],
+        maidLat: (saved['maidLat'] as num?)?.toDouble(),
+        maidLng: (saved['maidLng'] as num?)?.toDouble(),
       );
+
+      /// 🔥 UI list update
+      final index = orders.indexOf(order);
+      orders[index] = updatedOrder;
+
+      /// 🔥 IMPORTANT: Controller cache update
+      orderController.updateMaidInfo(order.id, saved);
     }
+
     if (mounted) setState(() {});
   }
 
   Future<void> _onRefresh() async {
     final orderController = context.read<OrderController>();
-    await _fetchOrdersAndMerge(orderController);
+
+    await _loadMaidInfo();  // 🔥 Step 1: Load saved tracking first
+    await orderController.fetchOrders(forceRefresh: true); // 🔥 Step 2: Fetch updated orders
+    _mergeSavedMaidInfo(orderController.orders); // 🔥 Step 3: Re-apply tracking to new data
+
+    if (mounted) setState(() {}); // 🔥 Step 4: Refresh UI
   }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -361,7 +403,6 @@ class OrderCard extends StatelessWidget {
       ),
     );
   }
-
   Widget _buildActionButtons(
       BuildContext context,
       Order order,
@@ -369,6 +410,25 @@ class OrderCard extends StatelessWidget {
       SocketController socketController,
       bool isSmallScreen,
       ) {
+
+    // 🧪 Debug prints
+    debugPrint("============== DEBUG ORDER ==============");
+    debugPrint("Order ID: ${order.id}");
+    debugPrint("Status: ${order.status}");
+    debugPrint("Maid Name: ${order.maidName}");
+    debugPrint("Maid Phone: ${order.maidPhone}");
+    debugPrint("Lat: ${order.maidLat}");
+    debugPrint("Lng: ${order.maidLng}");
+    debugPrint("==========================================");
+
+    // Updated Logic Check
+    final bool isTrackingAllowed =
+        order.status == 5 &&
+            order.maidLat != null &&
+            order.maidLng != null;
+
+    debugPrint("🔍 isTrackingAllowed: $isTrackingAllowed");
+
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -383,6 +443,7 @@ class OrderCard extends StatelessWidget {
             onPressed: () => _showCancelDialog(context, order),
             isSmallScreen: isSmallScreen,
           ),
+
         if (order.status == 7)
           _buildActionButton(
             context: context,
@@ -402,13 +463,17 @@ class OrderCard extends StatelessWidget {
             },
             isSmallScreen: isSmallScreen,
           ),
-        if (order.status == 5 && order.maidLat != null && order.maidLng != null)
+
+        /// Live Tracking Debug
+        if (isTrackingAllowed)
           _buildActionButton(
             context: context,
             icon: Icons.location_on_outlined,
             label: "Live Track",
             color: Colors.blueAccent,
             onPressed: () {
+              debugPrint("📍 LIVE TRACK BUTTON CLICKED FOR ORDER: ${order.id}");
+
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -431,6 +496,7 @@ class OrderCard extends StatelessWidget {
       ],
     );
   }
+
 
   Widget _buildActionButton({
     required BuildContext context,

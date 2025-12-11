@@ -1,7 +1,8 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:pin_code_fields/pin_code_fields.dart';
 import '../../controllers/user_controller.dart';
-import 'package:pin_code_fields/pin_code_fields.dart'; // Add dependency in pubspec.yaml
 
 class OtpScreen extends StatefulWidget {
   final String phone;
@@ -24,110 +25,151 @@ class _OtpScreenState extends State<OtpScreen> {
         return Scaffold(
           body: Stack(
             children: [
-              // Background gradient only, no image
-              Container(
-                width: double.infinity,
-                height: double.infinity,
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Color(0xff3f87c5), // top color
-                      Color(0xff000428), // bottom color
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+              // Background Image
+              Positioned.fill(
+                child: Image.asset(
+                  "assets/images/maid3.jpg",
+                  fit: BoxFit.cover,
                 ),
               ),
 
-              SafeArea(
-                child: Center(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.symmetric(horizontal: size.width * 0.08),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text(
-                          "Verify OTP",
-                          style: TextStyle(
-                            fontSize: 36,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
+              // Dark Transparent Overlay
+              Container(
+                color: Colors.black.withOpacity(0.45),
+              ),
+
+              // Main Content (Glassmorphism Panel)
+              Center(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.symmetric(horizontal: size.width * 0.08),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white.withOpacity(0.3)),
                         ),
-                        SizedBox(height: size.height * 0.02),
-                        Text(
-                          "Enter the 4-digit OTP sent to ${widget.phone}",
-                          style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 16),
-                          textAlign: TextAlign.center,
-                        ),
-                        SizedBox(height: size.height * 0.03),
-                        Form(
-                          key: _formKey,
-                          child: PinCodeTextField(
-                            length: 4, // changed to 4 digits
-                            appContext: context,
-                            keyboardType: TextInputType.number,
-                            autoFocus: true,
-                            animationType: AnimationType.fade,
-                            cursorColor: Colors.white,
-                            textStyle: const TextStyle(color: Colors.white, fontSize: 20),
-                            pinTheme: PinTheme(
-                              shape: PinCodeFieldShape.box,
-                              borderRadius: BorderRadius.circular(10),
-                              fieldHeight: 55,
-                              fieldWidth: 45,
-                              activeFillColor: Colors.orangeAccent.withOpacity(0.2),
-                              selectedFillColor: Colors.orangeAccent.withOpacity(0.3),
-                              inactiveFillColor: Colors.white.withOpacity(0.1),
-                              activeColor: Colors.orangeAccent,
-                              selectedColor: Colors.orangeAccent,
-                              inactiveColor: Colors.white70,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              "Verify OTP",
+                              style: TextStyle(
+                                fontSize: 36,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
                             ),
-                            onChanged: (value) => _otp = value,
-                            onCompleted: (value) {
-                              controller.errorMessage = null;
-                              controller.verifyOtp(value.trim(), context);
-                            },
-                          ),
-                        ),
-                        SizedBox(height: size.height * 0.03),
-                        controller.isLoading
-                            ? const CircularProgressIndicator(color: Colors.orangeAccent)
-                            : ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orangeAccent,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                            padding: EdgeInsets.symmetric(
-                              horizontal: size.width * 0.2,
-                              vertical: size.height * 0.02,
-                            ),
-                          ),
-                          onPressed: () {
-                            if (_otp.length == 4) {
-                              controller.errorMessage = null;
-                              controller.verifyOtp(_otp.trim(), context);
-                            }
-                          },
-                          child: const Text(
-                            "Verify OTP",
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                        if (controller.errorMessage != null)
-                          Padding(
-                            padding: EdgeInsets.only(top: size.height * 0.015),
-                            child: Text(
-                              controller.errorMessage!,
-                              style: const TextStyle(color: Colors.redAccent),
+                            const SizedBox(height: 10),
+                            Text(
+                              "Enter the 4-digit OTP sent to\n${widget.phone}",
                               textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 16,
+                              ),
                             ),
-                          ),
-                      ],
+
+                            SizedBox(height: size.height * 0.03),
+
+                            // OTP Field
+                            Form(
+                              key: _formKey,
+                              child: PinCodeTextField(
+                                length: 4,
+                                appContext: context,
+                                keyboardType: TextInputType.number,
+                                autoFocus: true,
+                                animationType: AnimationType.fade,
+                                cursorColor: Colors.white,
+                                textStyle: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                pinTheme: PinTheme(
+                                  shape: PinCodeFieldShape.box,
+                                  borderRadius: BorderRadius.circular(12),
+                                  fieldHeight: 55,
+                                  fieldWidth: 48,
+                                  activeFillColor: Colors.white.withOpacity(0.2),
+                                  selectedFillColor: Colors.white.withOpacity(0.25),
+                                  inactiveFillColor: Colors.white.withOpacity(0.12),
+                                  activeColor: Colors.blueAccent,
+                                  selectedColor: Colors.blueAccent,
+                                  inactiveColor: Colors.white70,
+                                ),
+                                onChanged: (value) => _otp = value,
+                                onCompleted: (value) {
+                                  controller.errorMessage = null;
+                                  controller.verifyOtp(value.trim(), context);
+                                },
+                              ),
+                            ),
+
+                            SizedBox(height: size.height * 0.03),
+
+                            controller.isLoading
+                                ? const CircularProgressIndicator(color: Colors.blueAccent)
+                                : ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blueAccent,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(15)),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: size.width * 0.22,
+                                  vertical: size.height * 0.018,
+                                ),
+                              ),
+                              onPressed: () {
+                                if (_otp.length == 4) {
+                                  controller.errorMessage = null;
+                                  controller.verifyOtp(_otp.trim(), context);
+                                }
+                              },
+                              child: const Text(
+                                "Verify OTP",
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+
+                            if (controller.errorMessage != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: Text(
+                                  controller.errorMessage!,
+                                  style: const TextStyle(
+                                      color: Colors.redAccent, fontSize: 14),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+
+                            const SizedBox(height: 10),
+                            TextButton(
+                              onPressed: () {
+                                controller.sendOtpForPasswordUser(widget.phone, context);
+                              },
+                              child: const Text(
+                                "Resend OTP",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),

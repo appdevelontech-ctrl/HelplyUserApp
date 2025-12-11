@@ -71,11 +71,12 @@ class _LiveTrackingPageState extends State<LiveTrackingPage> {
     _currentUserLat = widget.userLat;
     _currentUserLng = widget.userLng;
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _showPermissionDisclaimer(); // Show popup first
+
       _setupSocketListener();
-      _getCurrentUserLocation();
       _setupInitialData();
-      // Update route every 15 minutes, like MapScreen
+
       _routeUpdateTimer = Timer.periodic(const Duration(minutes: 15), (timer) {
         _updateRoute();
       });
@@ -134,6 +135,49 @@ class _LiveTrackingPageState extends State<LiveTrackingPage> {
     }
     return 5; // Default to Started
   }
+
+  Future<void> _showPermissionDisclaimer() async {
+    return showDialog(
+      context: context,
+      barrierDismissible: false, // User must tap button
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
+          title: Row(
+            children: const [
+              Icon(Icons.location_on, color: Colors.blue),
+              SizedBox(width: 8),
+              Text("Location Permission"),
+            ],
+          ),
+          content: const Text(
+            "We need access to your location ONLY to show live tracking of your maid.\n\n"
+                "We do NOT store or misuse your personal location data.",
+            style: TextStyle(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.pop(context); // User backs out
+              },
+              child: const Text("Cancel", style: TextStyle(color: Colors.red)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _getCurrentUserLocation(); // Start permission process
+              },
+              child: const Text("Allow"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
 
   Future<void> _getCurrentUserLocation() async {
     try {
