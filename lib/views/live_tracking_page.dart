@@ -5,12 +5,14 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../controllers/socket_controller.dart';
 import '../controllers/order_controller.dart';
 
 class LiveTrackingPage extends StatefulWidget {
   final String orderId;
+  final int orderidNameForShow;
   final double maidLat;
   final double maidLng;
   final String maidName;
@@ -23,6 +25,7 @@ class LiveTrackingPage extends StatefulWidget {
   const LiveTrackingPage({
     super.key,
     required this.orderId,
+    required this.orderidNameForShow,
     required this.maidLat,
     required this.maidLng,
     required this.maidName,
@@ -137,9 +140,18 @@ class _LiveTrackingPageState extends State<LiveTrackingPage> {
   }
 
   Future<void> _showPermissionDisclaimer() async {
+    final prefs = await SharedPreferences.getInstance();
+    bool alreadyAllowed = prefs.getBool("location_permission_given") ?? false;
+
+    // If already allowed before → Do NOT show popup
+    if (alreadyAllowed) {
+      _getCurrentUserLocation();
+      return;
+    }
+
     return showDialog(
       context: context,
-      barrierDismissible: false, // User must tap button
+      barrierDismissible: false,
       builder: (context) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
@@ -161,14 +173,18 @@ class _LiveTrackingPageState extends State<LiveTrackingPage> {
             TextButton(
               onPressed: () {
                 Navigator.pop(context);
-                Navigator.pop(context); // User backs out
+                Navigator.pop(context); // User exits screen
               },
               child: const Text("Cancel", style: TextStyle(color: Colors.red)),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.pop(context);
-                _getCurrentUserLocation(); // Start permission process
+
+                // Save preference so popup won't show again
+                await prefs.setBool("location_permission_given", true);
+
+                _getCurrentUserLocation(); // Proceed
               },
               child: const Text("Allow"),
             ),
@@ -257,8 +273,9 @@ class _LiveTrackingPageState extends State<LiveTrackingPage> {
         'https://maps.googleapis.com/maps/api/directions/json'
         '?origin=$origin'
         '&destination=$destination'
-        '&mode=walking' // Use walking mode for maid
+        '&mode=driving'
         '&key=$_googleApiKey';
+
 
     debugPrint("➡️ Directions API URL: $url");
     debugPrint("📍 Origin: $origin, Destination: $destination");
@@ -412,192 +429,179 @@ class _LiveTrackingPageState extends State<LiveTrackingPage> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final isSmallScreen = size.width < 600;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          "Live Tracking - ${widget.orderId}",
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          "Live Tracking",
+          style: const TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+
         ),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios, color: Colors.black, size: 22),
+          onPressed: () => Navigator.pop(context),
+        ),
+        centerTitle: true,
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Colors.deepPurple, Colors.purpleAccent],
+              colors: [Colors.white, Colors.white],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
           ),
         ),
-        centerTitle: true,
-        elevation: 0,
+        elevation: 4,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+        ),
       ),
+
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage != null
           ? Center(
         child: Text(
           _errorMessage!,
-          style: TextStyle(
-              fontSize: isSmallScreen ? 14 : 16, color: Colors.red),
+          style: const TextStyle(color: Colors.red, fontSize: 16),
         ),
       )
           : ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Order Info
-          Card(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15)),
-            elevation: 6,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.receipt_long,
-                          color: Colors.deepPurple),
-                      const SizedBox(width: 8),
-                      Text(
-                        "Order ID: ${widget.orderId}",
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
-                    ],
+
+          // _______________________________
+          // 🔹 ORDER HEADER CARD
+          // _______________________________
+
+          _modernCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.receipt_long,
+                    color: Colors.deepPurple, size: 30),
+                const SizedBox(height: 8),
+
+                Text(
+                  "Order #${widget.orderidNameForShow}",
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
                   ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      const Icon(Icons.timelapse, color: Colors.orange),
-                      const SizedBox(width: 8),
-                      Text(
-                        "Status: ${_statusText(_liveOrderStatus)}",
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                    ],
+                ),
+
+                const SizedBox(height: 8),
+                Text(
+                  "Status: ${_statusText(_liveOrderStatus)}",
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Colors.black87,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
+
           const SizedBox(height: 16),
 
-          // Maid Info
-          Card(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15)),
-            elevation: 6,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Row(
-                    children: const [
-                      Icon(Icons.person, color: Colors.blue),
-                      SizedBox(width: 8),
-                      Text(
-                        "Maid Details",
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 18),
-                      ),
-                    ],
-                  ),
-                  const Divider(height: 20),
-                  ListTile(
-                    leading:
-                    const Icon(Icons.account_circle, color: Colors.purple),
-                    title: Text(_liveMaidName ?? "Not Assigned"),
-                    subtitle: const Text("Name"),
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.phone, color: Colors.green),
-                    title: Text(_liveMaidPhone ?? "N/A"),
-                    subtitle: const Text("Phone"),
-                  ),
-                  ListTile(
-                    leading:
-                    const Icon(Icons.email, color: Colors.redAccent),
-                    title: Text(_liveMaidEmail ?? "N/A"),
-                    subtitle: const Text("Email"),
-                  ),
-                ],
-              ),
+          // _______________________________
+          // 🔹 MAID INFO
+          // _______________________________
+
+          _modernCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.person_pin_circle,
+                    size: 30, color: Colors.blue),
+                const SizedBox(height: 6),
+
+                const Text(
+                  "Maid Details",
+                  style: TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const Divider(),
+
+                _infoTile("Name", _liveMaidName ?? "Not Assigned"),
+                _infoTile("Phone", _liveMaidPhone ?? "N/A"),
+                _infoTile("Email", _liveMaidEmail ?? "N/A"),
+              ],
             ),
           ),
+
           const SizedBox(height: 16),
 
-          // Distance & ETA
-          Card(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15)),
-            elevation: 6,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Row(
-                    children: const [
-                      Icon(Icons.map, color: Colors.teal),
-                      SizedBox(width: 8),
-                      Text(
-                        "Tracking Information",
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 18),
-                      ),
-                    ],
-                  ),
-                  const Divider(height: 20),
-                  ListTile(
-                    leading:
-                    const Icon(Icons.route, color: Colors.blueAccent),
-                    title: Text(_distance ?? "Calculating..."),
-                    subtitle: const Text("Distance"),
-                  ),
-                  ListTile(
-                    leading:
-                    const Icon(Icons.access_time, color: Colors.orange),
-                    title: Text(_estimatedTime ?? "Calculating..."),
-                    subtitle: const Text("Estimated Time"),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.refresh, color: Colors.blueAccent),
+          // _______________________________
+          // 🔹 ETA + DISTANCE TILE
+          // _______________________________
+
+          _modernCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.directions_run,
+                    size: 30, color: Colors.teal),
+                const SizedBox(height: 6),
+
+                const Text(
+                  "Tracking Information",
+                  style: TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const Divider(),
+
+                _infoTile("Distance", _distance ?? "Calculating..."),
+                _infoTile("Estimated Time", _estimatedTime ?? "Calculating..."),
+
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton.icon(
                     onPressed: _updateRoute,
+                    icon: const Icon(Icons.refresh, color: Colors.white),
+                    label: const Text("Refresh",style: TextStyle(color: Colors.white),),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                   ),
-                ],
-              ),
+                )
+              ],
             ),
           ),
-          const SizedBox(height: 16),
 
-          // Map
+          const SizedBox(height: 20),
+
+          // _______________________________
+          // 🔹 GOOGLE MAP Modern Card
+          // _______________________________
+
           Card(
+            elevation: 10,
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(15)),
+              borderRadius: BorderRadius.circular(22),
+            ),
             clipBehavior: Clip.antiAlias,
-            elevation: 6,
             child: SizedBox(
-              height: size.height * 0.5,
+              height: size.height * 0.55,
               child: GoogleMap(
+                initialCameraPosition: CameraPosition(
+                  target: LatLng(_currentUserLat!, _currentUserLng!),
+                  zoom: 13,
+                ),
+                markers: _markers,
+                polylines: _polylines,
+                myLocationEnabled: true,
                 onMapCreated: (controller) {
                   _mapController = controller;
                   _updateMap();
                 },
-                initialCameraPosition: CameraPosition(
-                  target: LatLng(
-                    (_currentUserLat ?? 37.7749 + _liveMaidLat! ?? 37.7749) / 2,
-                    (_currentUserLng ?? -122.4194 + _liveMaidLng! ?? -122.4194) / 2,
-                  ),
-                  zoom: 12,
-                ),
-                myLocationEnabled: true,
-                myLocationButtonEnabled: true,
-                markers: _markers,
-                polylines: _polylines,
-                zoomControlsEnabled: true,
-                compassEnabled: true,
-                mapToolbarEnabled: true,
-                tiltGesturesEnabled: true,
               ),
             ),
           ),
@@ -605,4 +609,40 @@ class _LiveTrackingPageState extends State<LiveTrackingPage> {
       ),
     );
   }
+
+// 🔥 Modern Card Wrapper
+  Widget _modernCard({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+// 🔥 Info Tile
+  Widget _infoTile(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 15, color: Colors.grey)),
+          Text(value,
+              style:
+              const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
 }

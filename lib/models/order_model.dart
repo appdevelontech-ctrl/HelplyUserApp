@@ -222,6 +222,7 @@ class Order extends Equatable {
       maidLng: parseDouble(json['maidLng']),
       userLat: parseDouble(json['userLat']),
       userLng: parseDouble(json['userLng']),
+
     );
   }
 

@@ -26,7 +26,11 @@ class HomeController extends ChangeNotifier {
 
   HomeController() {
     fetchHomeLayoutData();
+    print("images is : $sliderImage");
   }
+
+
+
 
   void setLocation(String location) async {
     _selectedLocation = location;
@@ -72,7 +76,9 @@ class HomeController extends ChangeNotifier {
 
         if (data is Map<String, dynamic> && data.containsKey('homeLayout')) {
           final homeLayout = data['homeLayout'];
-          _sliderImage = homeLayout['slider_img'] ?? "";
+          _sliderImage = homeLayout['top_bar'] ?? "";
+          print("Slider image is: $sliderImage");
+
           // Populate bestOffers from latest_product_banner
           if (homeLayout['latest_product_banner'] != null) {
             _bestOffers = (homeLayout['latest_product_banner'] as List<dynamic>)

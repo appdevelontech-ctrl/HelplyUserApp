@@ -335,10 +335,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
             ),
             centerTitle: true,
-            backgroundColor: Colors.blue[700],
+            backgroundColor: Colors.blue[900],
             elevation: 3,
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
               onPressed: () => Navigator.pop(context),
             ),
             actions: [

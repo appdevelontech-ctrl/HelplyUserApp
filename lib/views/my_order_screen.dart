@@ -198,14 +198,16 @@ class OrderCard extends StatelessWidget {
       onTap: () {
         final orderController = context.read<OrderController>();
         Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => OrderDetailsPage(
-              orderId: order.id,
-              orderController: orderController,
-            ),
-          ),
-        );
+            context,
+            PageRouteBuilder(
+              transitionDuration: Duration(milliseconds: 350),
+              pageBuilder: (_, __, ___) => OrderDetailsPage(orderId: order.id, orderController: orderController),
+              transitionsBuilder: (_, animation, __, child) {
+                final offset = Tween(begin: Offset(1, 0), end: Offset.zero)
+                    .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+                return SlideTransition(position: offset, child: child);
+              },
+            ));
       },
       child: Card(
         margin: EdgeInsets.symmetric(
@@ -474,22 +476,30 @@ class OrderCard extends StatelessWidget {
             onPressed: () {
               debugPrint("📍 LIVE TRACK BUTTON CLICKED FOR ORDER: ${order.id}");
 
+
               Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => LiveTrackingPage(
-                    orderId: order.id,
-                    maidLat: order.maidLat ?? 0,
-                    maidLng: order.maidLng ?? 0,
-                    userLat: order.userLat ?? 0,
-                    userLng: order.userLng ?? 0,
-                    maidName: order.maidName ?? 'Unknown',
-                    maidPhone: order.maidPhone ?? '',
-                    maidEmail: order.maidEmail ?? '',
-                    orderStatus: order.status,
-                  ),
-                ),
-              );
+                  context,
+                  PageRouteBuilder(
+                    transitionDuration: Duration(milliseconds: 350),
+                    pageBuilder: (_, __, ___) =>  LiveTrackingPage(
+                      orderId: order.id,
+                      orderidNameForShow:order.orderId,
+                      maidLat: order.maidLat ?? 0,
+                      maidLng: order.maidLng ?? 0,
+                      userLat: order.userLat ?? 0,
+                      userLng: order.userLng ?? 0,
+                      maidName: order.maidName ?? 'Unknown',
+                      maidPhone: order.maidPhone ?? '',
+                      maidEmail: order.maidEmail ?? '',
+                      orderStatus: order.status,
+                    ),
+                    transitionsBuilder: (_, animation, __, child) {
+                      final offset = Tween(begin: Offset(1, 0), end: Offset.zero)
+                          .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+                      return SlideTransition(position: offset, child: child);
+                    },
+                  ));
+
             },
             isSmallScreen: isSmallScreen,
           ),

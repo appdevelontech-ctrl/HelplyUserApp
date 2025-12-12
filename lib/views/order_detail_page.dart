@@ -8,14 +8,9 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:open_filex/open_filex.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:file_saver/file_saver.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:open_filex/open_filex.dart';
 import '../controllers/order_controller.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 
 class OrderDetailsPage extends StatefulWidget {
   final String orderId;
@@ -39,23 +34,23 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     super.initState();
     _fetchOrderDetails();
   }
+
   Future<void> _fetchOrderDetails() async {
     try {
       await EasyLoading.show(status: 'Loading order details...');
-      // Force fetch fresh data (ignore cache)
+      // Force refresh is good for details page
       await widget.orderController.fetchOrderDetails(widget.orderId, forceRefresh: true);
       await EasyLoading.dismiss();
     } catch (e) {
       setState(() {
-        _errorMessage = e.toString();
-        if (e.toString().contains('Status code: 404')) {
-          _errorMessage = 'Order not found. Please check the order ID or contact support.';
+        if (e.toString().contains('404')) {
+          _errorMessage = 'Order not found. Please check the order ID.';
         } else {
-          _errorMessage = 'Failed to load order details: $_errorMessage';
+          _errorMessage = 'Failed to load order details.';
         }
       });
-      await EasyLoading.showError(_errorMessage!);
-      await EasyLoading.dismiss();
+      // Show error briefly without dismissing immediately to give user time to read
+      EasyLoading.showError(_errorMessage!, duration: const Duration(seconds: 3));
     }
   }
 
@@ -64,19 +59,12 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       await EasyLoading.show(status: 'Downloading...');
 
       final url = '${ApiServices.baseUrl}/download-invoice-order';
-      print('🧾 Downloading invoice for ID: $invoiceId');
-      print('➡️ Request URL: $url');
 
       final response = await http.post(
         Uri.parse(url),
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/pdf",
-        },
+        headers: {"Content-Type": "application/json", "Accept": "application/pdf"},
         body: json.encode({"invoiceId": invoiceId}),
       );
-
-      print('📥 Status Code: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final directory = await getApplicationDocumentsDirectory();
@@ -84,52 +72,49 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         final file = File(filePath);
 
         await file.writeAsBytes(response.bodyBytes);
-        print('✅ Invoice saved at: $filePath');
-
-        if (!mounted) return;
 
         EasyLoading.dismiss();
 
-        // Show action sheet with options
+        // 🚀 Better Bottom Sheet for Post-Download Actions
         showModalBottomSheet(
           context: context,
+          backgroundColor: Colors.white,
           shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-          ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
           builder: (_) {
             return Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Wrap(
-                runSpacing: 10,
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Center(
-                    child: Text(
-                      'Invoice Downloaded',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
+                  const Text(
+                    'Invoice Downloaded Successfully!',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
                   ),
-                  const Divider(),
+                  const Divider(height: 20, thickness: 1.5),
                   ListTile(
-                    leading: const Icon(Icons.print, color: Colors.blue),
-                    title: const Text('Print Invoice'),
+                    leading: const Icon(Icons.picture_as_pdf, color: Colors.blue),
+                    title: const Text('View / Print Invoice'),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                     onTap: () async {
                       Navigator.pop(context);
                       await OpenFilex.open(filePath);
                     },
                   ),
-
                   ListTile(
-                    leading: const Icon(Icons.share, color: Colors.deepPurple),
+                    leading: const Icon(Icons.share, color: Colors.purple),
                     title: const Text('Share Invoice'),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                     onTap: () async {
                       Navigator.pop(context);
-                      await Share.shareXFiles([XFile(filePath)], text: 'Invoice PDF');
+                      await Share.shareXFiles([XFile(filePath)], text: 'Order Invoice PDF');
                     },
                   ),
+                  const SizedBox(height: 10),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Close', style: TextStyle(color: Colors.red)),
+                  )
                 ],
               ),
             );
@@ -137,18 +122,13 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         );
       } else {
         EasyLoading.dismiss();
-        print('❌ Failed: ${response.statusCode}');
-        print('🧠 Response: ${response.body}');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to download invoice (${response.statusCode})')),
+          const SnackBar(content: Text('Failed to download invoice. Server responded with an error.')),
         );
       }
     } catch (e) {
       EasyLoading.dismiss();
-      print('💥 Exception: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error downloading invoice: $e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -157,100 +137,64 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     return ChangeNotifierProvider.value(
       value: widget.orderController,
       child: Scaffold(
-        appBar: _buildAppBar('Order Details'),
+        appBar: _buildAppBar("Order Details"),
+        backgroundColor: const Color(0xfff6f6f6), // Light background for contrast
         body: Consumer<OrderController>(
           builder: (context, controller, child) {
             if (controller.isOrderDetailsLoading) {
-              return const Center(
-                child: CircularProgressIndicator(color: Colors.orangeAccent),
-              );
+              return Center(child: CircularProgressIndicator(color: Theme.of(context).primaryColor)); // Use theme color
             }
 
             if (_errorMessage != null) {
               return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline, size: 50, color: Colors.red),
-                    const SizedBox(height: 16),
-                    Text(
-                      "Failed to load order details.",
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: Colors.red,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _errorMessage!,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[700],
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: _fetchOrderDetails,
-                      child: const Text('Retry'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ],
-                ),
-              );
+                  child: Text(_errorMessage!,
+                      style: const TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.w500)));
             }
 
             final order = controller.getOrderDetails(widget.orderId);
+
             if (order == null) {
-              return const Center(
-                child: Text(
-                  "Order not found.",
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: Colors.grey,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              );
+              return const Center(child: Text("Order not found.", style: TextStyle(fontSize: 16)));
             }
 
             return RefreshIndicator(
-              onRefresh: () => _fetchOrderDetails(),
-              color: Colors.orangeAccent,
+              onRefresh: _fetchOrderDetails,
+              color: Theme.of(context).primaryColor, // Refresh indicator color
               child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildOrderHeader(context, order),
+                    _styledCard(child: _buildOrderHeader(order)),
                     const SizedBox(height: 16),
-                    _buildUserDetails(context, order),
+                    _styledCard(child: _buildOrderInfo(order)),
                     const SizedBox(height: 16),
-                    _buildOrderDetails(context, order),
+                    _styledCard(child: _buildUserDetails(order)),
                     const SizedBox(height: 16),
-                    if (order.items.isNotEmpty) _buildItemsList(context, order),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        ElevatedButton(
-                          onPressed: () => _downloadInvoice(order.id),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blueAccent,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          child: const Text(
-                            'Download Invoice',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                          ),
-                        ),
+                    if (order.items.isNotEmpty)
+                      _styledCard(child: _buildItemList(order)),
+                    const SizedBox(height: 20),
 
-                      ],
-                    )
+                    // Download Button styled
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _downloadInvoice(order.id),
+                        icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
+                        label: const Text(
+                          "Download Invoice",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueAccent, // Use a vibrant blue
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 5, // Add some elevation
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -261,206 +205,232 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     );
   }
 
-  Widget _buildOrderHeader(BuildContext context, Order order) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
+  // 🎨 Zepto Style Card Wrapper
+  Widget _styledCard({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15), // Slightly smaller radius for a modern look
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.08), // Softer shadow
+              blurRadius: 15,
+              offset: const Offset(0, 5)),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  // 🎨 HEADER UI
+  Widget _buildOrderHeader(Order order) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  "Order #${order.orderId}",
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                    color: Colors.black87,
+                Text("Order #${order.orderId}",
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.black87)),
+                const SizedBox(height: 4),
+                Text("Date: ${DateFormat('dd MMM yyyy • hh:mm a').format(order.createdAt)}",
+                    style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+              ]),
+        ),
+        const SizedBox(width: 10),
+        _buildStatusChip(order.status),
+      ],
+    );
+  }
+
+  // 🎨 CUSTOMER DETAILS UI
+  Widget _buildUserDetails(Order order) {
+    final d = order.details[0];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _title("Customer Information"),
+        const Divider(height: 15, thickness: 1),
+        _row("Name", d.username, icon: Icons.person_outline),
+        _row("Phone", d.phone, icon: Icons.phone_outlined),
+        _row("Email", d.email, icon: Icons.mail_outline),
+        _row("Address", d.address, icon: Icons.location_on_outlined, isAddress: true),
+        _row("State", d.state, icon: Icons.area_chart),
+        _row("Pincode", d.pincode, icon: Icons.numbers),
+      ],
+    );
+  }
+
+  // 🎨 ORDER INFO UI
+  Widget _buildOrderInfo(Order order) {
+    final isPaid = order.payment == 1;
+    final paymentStatus = isPaid ? "Paid" : "Pending";
+    final paymentColor = isPaid ? Colors.green.shade700 : Colors.red.shade700;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _title("Payment & Order Summary"),
+        const Divider(height: 15, thickness: 1),
+        _row(
+          "Payment Status",
+          paymentStatus,
+          icon: Icons.credit_card_outlined,
+          valueStyle: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
+              color: paymentColor,
+              backgroundColor: paymentColor.withOpacity(0.1)),
+        ),
+        _row("Mode", order.mode, icon: Icons.payment_outlined),
+        if (order.otp != null) _row("OTP", order.otp.toString(), icon: Icons.security_outlined),
+        _row("Agent ID", order.agentId, icon: Icons.support_agent_outlined),
+        const Divider(height: 20, thickness: 1.5, color: Colors.black12),
+        _row("Shipping/Delivery Fee", "₹${order.shipping}", icon: Icons.local_shipping_outlined),
+        _row("Discount Applied", "₹${order.discount}", icon: Icons.discount_outlined),
+        _highlightedRow("Total Amount", "₹${order.totalAmount.toStringAsFixed(2)}", icon: Icons.monetization_on_outlined),
+      ],
+    );
+  }
+
+  // 🎨 ITEM LIST UI
+  Widget _buildItemList(Order order) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _title("Items (${order.items.length})"),
+        const Divider(height: 15, thickness: 1),
+
+        ...order.items.map((i) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 15),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 🖼️ Rounded Image
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.network(
+                    i.image,
+                    width: 70,
+                    height: 70,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) =>
+                        Container(width: 70, height: 70, color: Colors.grey.shade200, child: const Icon(Icons.image_not_supported, size: 30, color: Colors.grey)),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  "Date: ${DateFormat('dd MMM yyyy, hh:mm a').format(order.createdAt)}",
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                    fontStyle: FontStyle.italic,
+                const SizedBox(width: 15),
+
+                // 📝 Item Details
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        i.title,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 16,
+                            color: Colors.black87),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        "Qty: ${i.quantity} x ₹${i.price}",
+                        style: TextStyle(color: Colors.grey[700], fontSize: 14),
+                      ),
+                      const SizedBox(height: 4),
+                      // Total price for item
+                      Text(
+                        "Total: ₹${(i.quantity * i.price).toStringAsFixed(2)}",
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            _buildStatusChip(order.status),
-          ],
-        ),
-      ),
+          );
+        })
+      ],
     );
   }
 
-  Widget _buildUserDetails(BuildContext context, Order order) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Customer Information",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (order.details.isNotEmpty)
-              ...[
-                _buildDetailRow("Name", order.details[0].username),
-                _buildDetailRow("Phone", order.details[0].phone),
-                _buildDetailRow("Email", order.details[0].email),
-                _buildDetailRow("Address", order.details[0].address),
-                _buildDetailRow("State", order.details[0].state),
-                _buildDetailRow("Pincode", order.details[0].pincode),
-              ]
-            else
-              const Text(
-                "No customer information available.",
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
 
-  Widget _buildOrderDetails(BuildContext context, Order order) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Order Information",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 12),
-            _buildDetailRow("Total Amount", "₹${order.totalAmount.toStringAsFixed(2)}"),
-            _buildDetailRow("Payment Mode", order.mode),
-            if (order.otp != null) _buildDetailRow("OTP", order.otp.toString()),
-            _buildDetailRow("Payment Status", order.payment == 1 ? "Paid" : "Pending"),
-            _buildDetailRow("Discount", "₹${order.discount}"),
-            _buildDetailRow("Shipping", "₹${order.shipping}"),
-            _buildDetailRow("Lead Status", order.leadStatus.toString()),
-            _buildDetailRow("Agent ID", order.agentId),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildItemsList(BuildContext context, Order order) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Items",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 12),
-            ...order.items.map((item) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      item.image,
-                      width: 50,
-                      height: 50,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) =>
-                      const Icon(Icons.error, size: 50),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.title,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        Text(
-                          "Qty: ${item.quantity} | Price: ₹${item.price}",
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[700],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            )),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
+  // 🖋️ Helper Widget for Titles
+  Widget _title(String text) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Text(
+          text,
+          style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1E1E1E))), // Darker title color
+    );
+  }
+
+  // ℹ️ Helper Widget for Info Rows
+  Widget _row(String label, String value, {IconData? icon, bool isAddress = false, TextStyle? valueStyle}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: isAddress ? CrossAxisAlignment.start : CrossAxisAlignment.center,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[700],
-              fontWeight: FontWeight.w500,
-            ),
+          Icon(icon ?? Icons.info_outline, size: 20, color: Colors.grey.shade600),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 2,
+            child: Text(label, style: TextStyle(color: Colors.grey[700], fontSize: 15)),
           ),
-          Flexible(
+          Expanded(
+            flex: 3,
             child: Text(
               value,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Colors.black87,
-                fontWeight: FontWeight.w500,
-              ),
               textAlign: TextAlign.right,
-              overflow: TextOverflow.ellipsis,
+              style: valueStyle ?? const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  // 💰 Helper Widget for Highlighted Row (e.g., Total Amount)
+  Widget _highlightedRow(String label, String value, {IconData? icon}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      margin: const EdgeInsets.only(top: 8),
+      decoration: BoxDecoration(
+        color: Colors.lightGreen.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.lightGreen.shade100),
+      ),
+      child: Row(
+        children: [
+          Icon(icon ?? Icons.star, size: 22, color: Colors.green.shade700),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: Colors.green.shade800,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 18,
+              color: Colors.black,
             ),
           ),
         ],
@@ -468,77 +438,97 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     );
   }
 
+// 🎨 PREMIUM TYPED STATUS CHIP (NO ERRORS)
   Widget _buildStatusChip(int status) {
-    String statusText = _statusText(status);
-    Color chipColor;
-    switch (status) {
-      case 0:
-        chipColor = Colors.red.shade100;
-        break;
-      case 1:
-        chipColor = Colors.orange.shade100;
-        break;
-      case 2:
-        chipColor = Colors.purple.shade100;
-        break;
-      case 5:
-        chipColor = Colors.blue.shade100;
-        break;
-      case 7:
-        chipColor = Colors.green.shade100;
-        break;
-      default:
-        chipColor = Colors.grey.shade100;
-    }
+    final Map<int, Map<String, dynamic>> map = {
+      0: {
+        "label": "Cancelled",
+        "icon": Icons.cancel,
+        "bg": Colors.red.shade50,
+        "color": Colors.red.shade700
+      },
+      1: {
+        "label": "Order Placed",
+        "icon": Icons.access_time,
+        "bg": Colors.amber.shade50,
+        "color": Colors.amber.shade700
+      },
+      2: {
+        "label": "Accepted",
+        "icon": Icons.check_circle_outline,
+        "bg": Colors.purple.shade50,
+        "color": Colors.purple.shade700
+      },
+      5: {
+        "label": "Out for Delivery",
+        "icon": Icons.two_wheeler_outlined,
+        "bg": Colors.blue.shade50,
+        "color": Colors.blue.shade700
+      },
+      7: {
+        "label": "Delivered",
+        "icon": Icons.task_alt,
+        "bg": Colors.green.shade50,
+        "color": Colors.green.shade700
+      },
+    };
 
-    return Chip(
-      label: Text(
-        statusText,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: chipColor.computeLuminance() > 0.5 ? Colors.black87 : Colors.white,
-        ),
+    final data = map[status] ??
+        {
+          "label": "Unknown Status",
+          "icon": Icons.help_outline,
+          "bg": Colors.grey.shade100,
+          "color": Colors.grey.shade700
+        };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: data["bg"],
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(color: data["color"].withOpacity(0.3)),
       ),
-      backgroundColor: chipColor,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            data["icon"],
+            size: 16,
+            color: data["color"],
+          ),
+          const SizedBox(width: 6),
+          Text(
+            data["label"],
+            style: TextStyle(
+              color: data["color"],
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          )
+        ],
+      ),
     );
   }
 
-  String _statusText(int status) {
-    switch (status) {
-      case 0:
-        return "Cancelled";
-      case 1:
-        return "Placed";
-      case 2:
-        return "Accepted";
-      case 5:
-        return "Started";
-      case 7:
-        return "Completed";
-      default:
-        return "Unknown";
-    }
-  }
-
+  // ⚙️ Premium AppBar
   AppBar _buildAppBar(String title) {
     return AppBar(
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back, color: Colors.white),
-        onPressed: () => Navigator.pop(context),
-      ),
+      backgroundColor: Colors.white,
+      elevation: 0, // Flat app bar looks modern
+      scrolledUnderElevation: 4, // Add shadow on scroll
       title: Text(
         title,
         style: const TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
           fontSize: 20,
+          fontWeight: FontWeight.w800,
+          color: Colors.black,
         ),
       ),
-      backgroundColor: Colors.blue[700],
-      elevation: 3,
+      centerTitle: true,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black, size: 20),
+        onPressed: () => Navigator.pop(context),
+      ),
     );
   }
 }

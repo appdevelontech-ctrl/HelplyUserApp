@@ -340,6 +340,42 @@ class _CartPageState extends State<CartPage> {
     }
   }
 
+  Widget _buildEmptyCartUI() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.shopping_cart_rounded,
+            size: 100,
+            color: Colors.blueAccent.withOpacity(0.5),
+          ),
+          const SizedBox(height: 15),
+
+          const Text(
+            "Your cart is empty",
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          const Text(
+            "Add something to checkout!",
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.black54,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
   @override
   Widget build(BuildContext context) {
     final cartProvider = Provider.of<CartProvider>(context);
@@ -379,35 +415,8 @@ class _CartPageState extends State<CartPage> {
     }
 
     if (cartProvider.cartItems.isEmpty) {
-      return Scaffold(
-        body: RefreshIndicator(
-          onRefresh: _refreshCart,
-          color: Colors.blueAccent,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: SizedBox(
-              height: screenHeight,
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      "Your cart is empty",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
-                    ),
-                    SizedBox(height: screenHeight * 0.02),
-                    Text(
-                      'Add items to your cart to proceed.',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                    ),
-
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
+      return
+        _buildEmptyCartUI();
     }
 
     return Scaffold(
