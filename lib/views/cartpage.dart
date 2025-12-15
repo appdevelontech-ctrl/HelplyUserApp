@@ -773,7 +773,14 @@ class _CartPageState extends State<CartPage> {
                           label: "Search your location...",
                           height: fieldHeight,
                           suffixIcon: const Icon(Icons.location_on, color: Colors.blue),
-                          onChanged: _autoCompleteSearch,
+                          onChanged: (value) {
+                            _autoCompleteSearch(value);
+
+                            // 🔥 Reset GPS values
+                            _latitude = null;
+                            _longitude = null;
+                          },
+
                         ),
                         if (_predictions.isNotEmpty)
                           Container(

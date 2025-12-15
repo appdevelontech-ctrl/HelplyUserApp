@@ -307,58 +307,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     ),
 
                     const SizedBox(height: 30),
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.blue.shade400, Colors.blue.shade600],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      padding: const EdgeInsets.all(20),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  "One Stop for All Household Help",
-                                  style: TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                const Text(
-                                  "Book trusted house help services anytime and anywhere. Reliable and affordable.",
-                                  style: TextStyle(color: Colors.white70),
-                                ),
-
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 20),
-                          Expanded(
-                            child: CachedNetworkImage(
-                              imageUrl:
-                              "https://backend-olxs.onrender.com/uploads/new/image-1758104213573.png",
-                              fit: BoxFit.contain,
-                              placeholder: (context, url) => Shimmer.fromColors(
-                                baseColor: Colors.grey[300]!,
-                                highlightColor: Colors.grey[100]!,
-                                child: Container(height: 100),
-                              ),
-                              errorWidget: (context, url, error) => Image.asset(
-                                'assets/images/fallback_image.webp',
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                    homeHeroCard(context)
 
                   ],
                 ),
@@ -421,6 +370,135 @@ class _DashboardScreenState extends State<DashboardScreen>
       },
     );
   }
+
+
+
+
+  Widget homeHeroCard(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final w = size.width;
+
+    final bool isSmall = w < 360;
+    final bool isTablet = w >= 600;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: w * 0.05,
+        vertical: w * 0.055,
+      ),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.blue.shade500,
+            Colors.blue.shade700,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.shade700.withOpacity(0.35),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+
+      child: LayoutBuilder(
+        builder: (_, constraints) {
+          final isNarrow = constraints.maxWidth < 500;
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+
+              /// 🔥 TEXT SECTION
+              Expanded(
+                flex: isNarrow ? 3 : 4,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      "One Stop for All\nHousehold Help",
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: isSmall
+                            ? 18
+                            : isTablet
+                            ? 26
+                            : 22,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        height: 1.25,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+
+                    SizedBox(height: w * 0.025),
+
+                    Text(
+                      "Book trusted home services anytime, anywhere.\nFast, reliable and affordable professionals.",
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: isSmall ? 13 : 15,
+                        color: Colors.white.withOpacity(0.9),
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              SizedBox(width: w * 0.04),
+
+              /// 🔥 IMAGE SECTION (ROUNDED + REDUCED)
+              Expanded(
+                flex: isNarrow ? 2 : 3,
+                child: Padding(
+                  padding: EdgeInsets.all(w * 0.02),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(w * 0.06), // 👈 smooth radius
+                    child: AspectRatio(
+                      aspectRatio: 1,
+                      child: CachedNetworkImage(
+                        imageUrl:
+                        "https://backend-olxs.onrender.com/uploads/new/image-1758104213573.png",
+                        fit: BoxFit.contain,
+                        placeholder: (_, __) => Shimmer.fromColors(
+                          baseColor: Colors.white.withOpacity(0.2),
+                          highlightColor: Colors.white.withOpacity(0.35),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius:
+                              BorderRadius.circular(w * 0.06), // 👈 match radius
+                            ),
+                          ),
+                        ),
+                        errorWidget: (_, __, ___) => Image.asset(
+                          'assets/images/fallback_image.webp',
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+
   Widget serviceCard({
     required String title,
     required String imageUrl,

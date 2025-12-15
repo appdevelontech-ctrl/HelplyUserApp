@@ -42,6 +42,10 @@ class LiveTrackingPage extends StatefulWidget {
 
 class _LiveTrackingPageState extends State<LiveTrackingPage> {
   final SocketController _socket = SocketController();
+  LatLng? _lastSocketPos;
+  bool _reached = false;
+  String _storageKey(String orderId) => "maid_live_$orderId";
+
 
   GoogleMapController? _map;
   BitmapDescriptor? _bikeIcon;
@@ -59,7 +63,13 @@ class _LiveTrackingPageState extends State<LiveTrackingPage> {
   final Set<Marker> _markers = {};
   final Set<Polyline> _polylines = {};
 
-  static const String _googleKey = "YOUR_GOOGLE_KEY_HERE";
+  static const String _googleKey = "AIzaSyCcppZWLo75ylSQvsR-bTPZLEFEEec5nrY";
+
+
+
+  bool _isMaidOnline = false;
+  DateTime? _lastSocketTime;
+  Timer? _offlineTimer;
 
   // ------------------------------------------------------------
   // INIT
@@ -67,6 +77,8 @@ class _LiveTrackingPageState extends State<LiveTrackingPage> {
   @override
   void initState() {
     super.initState();
+    _isMaidOnline = false;
+    _startOfflineWatcher();
 
     _orderPos = LatLng(widget.orderLat, widget.orderLng);
 
@@ -84,10 +96,62 @@ class _LiveTrackingPageState extends State<LiveTrackingPage> {
     _socket.onLiveTracking = _handleLiveTracking;
   }
 
+
+  Future<void> _saveLiveLocation(
+      double lat,
+      double lng, {
+        bool reached = false,
+      }) async {
+
+    final prefs = await SharedPreferences.getInstance();
+
+    final data = {
+      "lat": lat,
+      "lng": lng,
+      "reached": reached,
+      "time": DateTime.now().toIso8601String(),
+    };
+
+    await prefs.setString(
+      _storageKey(widget.orderId),
+      jsonEncode(data),
+    );
+
+    debugPrint("💾 LOCATION SAVED LOCALLY → $data");
+  }
+  void _startOfflineWatcher() {
+    _offlineTimer?.cancel();
+
+    _offlineTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (_lastSocketTime == null) return;
+
+      final diff =
+          DateTime.now().difference(_lastSocketTime!).inSeconds;
+
+      if (diff > 30 && _isMaidOnline && !_reached) {
+        debugPrint("🔴 MAID OFFLINE (no socket update)");
+
+        setState(() {
+          _isMaidOnline = false;
+        });
+      }
+    });
+  }
+
+
   // ------------------------------------------------------------
   // SOCKET CALLBACK (🔥 FIXED)
   // ------------------------------------------------------------
   void _handleLiveTracking(String orderId, Map<String, dynamic> data) async {
+
+    _lastSocketTime = DateTime.now();
+
+    if (!_isMaidOnline) {
+      debugPrint("🟢 MAID IS NOW ONLINE");
+    }
+
+    _isMaidOnline = true;
+
     if (!mounted) return;
     if (orderId != widget.orderId) return;
 
@@ -95,32 +159,106 @@ class _LiveTrackingPageState extends State<LiveTrackingPage> {
     final lng = (data['maidLng'] as num).toDouble();
     final newPos = LatLng(lat, lng);
 
-    debugPrint("📡 SOCKET UPDATE → $newPos");
+    debugPrint("📡 SOCKET UPDATE RECEIVED → $newPos");
 
+    // --------------------------------------------------
+    // SAME LOCATION CHECK (BUT DO NOT RETURN ❌)
+    // --------------------------------------------------
+    final isSameLocation = _lastSocketPos != null &&
+        _lastSocketPos!.latitude == newPos.latitude &&
+        _lastSocketPos!.longitude == newPos.longitude;
+
+    if (isSameLocation) {
+      debugPrint("⚠️ SAME LOCATION RECEIVED (still updating UI)");
+    } else {
+      debugPrint("🟢 NEW LOCATION DETECTED");
+      debugPrint("📍 OLD=$_lastSocketPos");
+      debugPrint("📍 NEW=$newPos");
+    }
+
+    _lastSocketPos = newPos;
+
+    // --------------------------------------------------
+    // DISTANCE CALCULATION
+    // --------------------------------------------------
+    final km = _haversineDistance(newPos, _orderPos);
+    final meters = (km * 1000).round();
+
+    debugPrint("📏 DISTANCE = $meters meters");
+
+    _distanceText =
+    km < 1 ? "$meters m" : "${km.toStringAsFixed(1)} km";
+    _etaText = _calculateEta(km);
+
+    // --------------------------------------------------
+    // REACHED STATE
+    // --------------------------------------------------
+    if (meters <= 30 && !_reached) {
+      _reached = true;
+
+      // ✅ STEP 5 (YAHAN)
+      _isMaidOnline = false;
+      _offlineTimer?.cancel();
+
+      _showArrival = false;
+      _etaText = "Reached";
+      _distanceText = "0 m";
+
+      await _saveLiveLocation(lat, lng, reached: true);
+
+      _showReachedMessage();
+
+      debugPrint("🏁 MAID REACHED DESTINATION");
+
+      setState(() {});
+      return;
+    }
+
+
+
+    // --------------------------------------------------
+    // ARRIVING SOON STATE
+    // --------------------------------------------------
+    if (meters <= 150 && !_showArrival && !_reached) {
+      _showArrival = true;
+      debugPrint("🚨 ARRIVING IN 2 MINS");
+    }
+
+    // --------------------------------------------------
+    // MARKER UPDATE (even if same location)
+    // --------------------------------------------------
     if (_maidPos != null) {
       _bearing = _calculateBearing(_maidPos!, newPos);
-
-      final km = _haversineDistance(newPos, _orderPos);
-      _distanceText =
-      km < 1 ? "${(km * 1000).round()} m" : "${km.toStringAsFixed(1)} km";
-      _etaText = _calculateEta(km);
-
-      debugPrint("📏 Distance=$_distanceText  ⏱ ETA=$_etaText");
-
-      if (km < 0.15 && !_showArrival) {
-        _showArrival = true;
-        debugPrint("🚨 ARRIVING SOON");
-      }
-
       _animateBezier(_maidPos!, newPos);
     } else {
       _maidPos = newPos;
       _updateMap();
     }
 
+    // --------------------------------------------------
+    // ROUTE UPDATE (throttled)
+    // --------------------------------------------------
     _updateRouteThrottled();
+
     await _saveLiveLocation(lat, lng);
+
+    debugPrint("✅ UI UPDATED FROM SOCKET\n");
   }
+  void _showReachedMessage() {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          "🏁 Reached at destination. Your maid has arrived.",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 4),
+      ),
+    );
+  }
+
 
   // ------------------------------------------------------------
   // BIKE ICON (SIZE FIXED)
@@ -136,7 +274,13 @@ class _LiveTrackingPageState extends State<LiveTrackingPage> {
     final data = await frame.image.toByteData(format: ui.ImageByteFormat.png);
 
     _bikeIcon = BitmapDescriptor.fromBytes(data!.buffer.asUint8List());
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+      if (_maidPos != null) {
+        _updateMap();
+      }
+    }
+
   }
 
   // ------------------------------------------------------------
@@ -324,26 +468,42 @@ class _LiveTrackingPageState extends State<LiveTrackingPage> {
     return pts;
   }
 
-  Future<void> _saveLiveLocation(double lat, double lng) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString("maid_info") ?? "{}";
-    final map = jsonDecode(raw);
-    map[widget.orderId] = {'lat': lat, 'lng': lng};
-    await prefs.setString("maid_info", jsonEncode(map));
-  }
 
   Future<void> _loadSavedLocation() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString("maid_info");
-    if (raw == null) return;
+    final raw = prefs.getString(_storageKey(widget.orderId));
 
-    final map = jsonDecode(raw);
-    final d = map[widget.orderId];
-    if (d == null) return;
+    if (raw == null) {
+      debugPrint("ℹ️ No previous location found");
+      return;
+    }
 
-    _maidPos = LatLng(d['lat'], d['lng']);
-    _updateMap();
+    final data = jsonDecode(raw);
+
+    final lat = data['lat'];
+    final lng = data['lng'];
+    final reached = data['reached'] ?? false;
+
+    _maidPos = LatLng(lat, lng);
+    _reached = reached;
+
+    // ✅ RESTORE STATUS
+    _isMaidOnline = !reached;
+
+    debugPrint("📍 RESTORED LAST LOCATION → $_maidPos");
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (!mounted) return;
+
+      _updateMap();
+
+      // ✅ ADD THIS
+      _updateRouteThrottled();
+    });
+
   }
+
 
   // ------------------------------------------------------------
   // CALL
@@ -378,8 +538,17 @@ class _LiveTrackingPageState extends State<LiveTrackingPage> {
             CameraPosition(target: _orderPos, zoom: 14),
             markers: _markers,
             polylines: _polylines,
-            onMapCreated: (c) => _map = c,
+            onMapCreated: (c) {
+              _map = c;
+
+              if (_maidPos != null) {
+                _updateMap();
+                _updateRouteThrottled(); // ✅ SAFETY
+              }
+            },
+
           ),
+
 
           if (_showArrival)
             Positioned(
@@ -427,22 +596,60 @@ class _LiveTrackingPageState extends State<LiveTrackingPage> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      const Icon(Icons.two_wheeler,
-                          color: Colors.green),
+                      const Icon(Icons.two_wheeler, color: Colors.green),
                       const SizedBox(width: 8),
+
                       Expanded(
-                        child: Text(widget.maidName,
-                            style: const TextStyle(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.maidName,
+                              style: const TextStyle(
                                 fontSize: 18,
-                                fontWeight: FontWeight.bold)),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+
+                            const SizedBox(height: 4),
+
+                            Row(
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: _isMaidOnline
+                                        ? Colors.green
+                                        : Colors.grey,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _isMaidOnline ? "Online" : "Offline",
+                                  style: TextStyle(
+                                    color: _isMaidOnline
+                                        ? Colors.green
+                                        : Colors.grey,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
+
                       IconButton(
-                        icon: const Icon(Icons.call,
-                            color: Colors.green),
+                        icon: const Icon(Icons.call, color: Colors.green),
                         onPressed: _callMaid,
-                      )
+                      ),
                     ],
                   ),
+
+
                   const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment:

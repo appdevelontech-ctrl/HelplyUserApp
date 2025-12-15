@@ -7,7 +7,6 @@ import '../controllers/location_controller.dart';
 import '../controllers/order_controller.dart';
 import '../controllers/cart_provider.dart';
 import '../controllers/user_controller.dart';
-import '../controllers/socket_controller.dart';
 
 import '../views/dashboard_screen.dart';
 import '../views/cartpage.dart';
@@ -27,21 +26,31 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen>
     with SingleTickerProviderStateMixin {
+
   int _currentIndex = 0;
 
   Timer? _scrollTimer;
+  Timer? _resumeTimer;
   ScrollController? _scrollController;
   bool _scrollForward = true;
+  bool _userScrolling = false;
 
   late AnimationController _loader;
+
+  final List<Widget> _screens = const [
+    DashboardScreen(),
+    UserOrdersPage(),
+    CartPage(),
+  ];
 
   @override
   void initState() {
     super.initState();
 
     _loader = AnimationController(
-        vsync: this, duration: const Duration(seconds: 2))
-      ..repeat();
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<OrderController>(context, listen: false)
@@ -52,54 +61,54 @@ class _MainScreenState extends State<MainScreen>
 
   @override
   void dispose() {
+    _loader.dispose();
     _resumeTimer?.cancel();
     _scrollTimer?.cancel();
     _scrollController?.dispose();
     super.dispose();
   }
 
-  // -----------------------------------------------
-  // AUTO SCROLL ORDER STATUS (ZEPT0 STYLE)
-  // -----------------------------------------------
+  // ------------------------------------------------
+  // AUTO SCROLL
+  // ------------------------------------------------
   void _startAutoScroll() {
     _scrollTimer?.cancel();
 
-    _scrollTimer =
-        Timer.periodic(const Duration(milliseconds: 260), (timer) {
-          if (_scrollController?.hasClients ?? false) {
-            final max = _scrollController!.position.maxScrollExtent;
-            final current = _scrollController!.offset;
+    _scrollTimer = Timer.periodic(
+      const Duration(milliseconds: 260),
+          (_) {
+        if (!(_scrollController?.hasClients ?? false)) return;
 
-            if (_scrollForward && current < max) {
-              _scrollController!.animateTo(
-                current + 45,
-                duration: const Duration(milliseconds: 240),
-                curve: Curves.linear,
-              );
-            } else if (!_scrollForward && current > 0) {
-              _scrollController!.animateTo(
-                current - 45,
-                duration: const Duration(milliseconds: 240),
-                curve: Curves.linear,
-              );
-            } else {
-              _scrollForward = !_scrollForward;
-            }
-          }
-        });
+        final max = _scrollController!.position.maxScrollExtent;
+        final current = _scrollController!.offset;
+
+        if (_scrollForward && current < max) {
+          _scrollController!.animateTo(
+            current + 45,
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.linear,
+          );
+        } else if (!_scrollForward && current > 0) {
+          _scrollController!.animateTo(
+            current - 45,
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.linear,
+          );
+        } else {
+          _scrollForward = !_scrollForward;
+        }
+      },
+    );
   }
 
-  // ----------------------------------
-  // SCREENS
-  // ----------------------------------
-  final List<Widget> _screens = const [
-    DashboardScreen(),
-    UserOrdersPage(),
-    CartPage(),
-  ];
-
+  // ------------------------------------------------
+  // BUILD
+  // ------------------------------------------------
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final w = size.width;
+
     return WillPopScope(
       onWillPop: () async {
         if (_currentIndex != 0) {
@@ -110,123 +119,77 @@ class _MainScreenState extends State<MainScreen>
       },
       child: Scaffold(
         backgroundColor: Colors.grey.shade100,
-
-        drawer: _buildDrawer(),
-        appBar: _buildPremiumAppBar(),
-
+        drawer: _buildDrawer(w),
+        appBar: _buildAppBar(w),
         body: Column(
           children: [
-            _buildAutoScrollOrders(),
+            _buildAutoScrollOrders(w),
             Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                child: IndexedStack(
-                  index: _currentIndex,
-                  children: _screens,
-                ),
+              child: IndexedStack(
+                index: _currentIndex,
+                children: _screens,
               ),
             ),
           ],
         ),
-
-        bottomNavigationBar: _buildFloatingBottomBar(),
+        bottomNavigationBar: _buildBottomNav(w),
       ),
     );
   }
 
-  // --------------------------------------------------------------------
-  // PREMIUM TOP APPBAR (MODERN GRADIENT LIKE ZEPT0 + URBAN COMPANY)
-  // --------------------------------------------------------------------
-  PreferredSizeWidget _buildPremiumAppBar() {
+  // ------------------------------------------------
+  // APP BAR
+  // ------------------------------------------------
+  PreferredSizeWidget _buildAppBar(double w) {
     return PreferredSize(
-      preferredSize: const Size.fromHeight(70),
+      preferredSize: Size.fromHeight(w * 0.18),
       child: AppBar(
         elevation: 4,
-        centerTitle: false,
         backgroundColor: Colors.transparent,
-        automaticallyImplyLeading: false, // ❗ IMPORTANT
-
+        automaticallyImplyLeading: false,
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               colors: [Color(0xff004e92), Color(0xff000428)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
             ),
           ),
         ),
-
         title: Row(
           children: [
-            // 🔥 WHITE MENU ICON
-            // 🔥 ANIMATED MENU ICON (Smooth Press Animation)
             Builder(
-              builder: (context) {
-                return GestureDetector(
-                  onTap: () {
-                    Scaffold.of(context).openDrawer();
-                  },
-                  child: AnimatedScale(
-                    scale: 1,
-                    duration: const Duration(milliseconds: 120),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.menu_rounded,
-                        color: Colors.white,
-                        size: 26,
-                      ),
-                    ),
+              builder: (context) => GestureDetector(
+                onTap: () => Scaffold.of(context).openDrawer(),
+                child: Container(
+                  padding: EdgeInsets.all(w * 0.015),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(.15),
+                    borderRadius: BorderRadius.circular(w * 0.025),
                   ),
-                );
-              },
-            ),
-
-
-            const SizedBox(width: 6),
-
-            // 🔥 LOGO
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.network(
-                "https://backend-olxs.onrender.com/uploads/new/image-1755174201972.webp",
-                height: 22,
-                width: 120,
-                fit: BoxFit.cover,
+                  child: Icon(
+                    Icons.menu_rounded,
+                    color: Colors.white,
+                    size: w * 0.06,
+                  ),
+                ),
               ),
             ),
-
-            const SizedBox(width: 12),
-
-            // 🔥 LOCATION DROPDOWN
-            Expanded(child: _locationSelector()),
+            SizedBox(width: w * 0.02),
+            Image.network(
+              "https://backend-olxs.onrender.com/uploads/new/image-1755174201972.webp",
+              width: w * 0.3,
+              height: w * 0.06,
+              fit: BoxFit.contain,
+            ),
+            SizedBox(width: w * 0.02),
+            Expanded(child: _locationSelector(w)),
           ],
         ),
-
         actions: [
-          GestureDetector(
-            onTap: () {
-              Navigator.push(
-                  context,
-                  PageRouteBuilder(
-                    transitionDuration: Duration(milliseconds: 350),
-                    pageBuilder: (_, __, ___) => ProfileScreen(),
-                    transitionsBuilder: (_, animation, __, child) {
-                      final offset = Tween(begin: Offset(1, 0), end: Offset.zero)
-                          .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
-                      return SlideTransition(position: offset, child: child);
-                    },
-                  ));
-            },
-            child: const Padding(
-              padding: EdgeInsets.only(right: 12),
-              child: CircleAvatar(
-                backgroundImage: AssetImage("assets/images/profile.png"),
-              ),
+          Padding(
+            padding: EdgeInsets.only(right: w * 0.03),
+            child: CircleAvatar(
+              radius: w * 0.045,
+              backgroundImage: const AssetImage("assets/images/profile.png"),
             ),
           ),
         ],
@@ -234,112 +197,75 @@ class _MainScreenState extends State<MainScreen>
     );
   }
 
-
-  // -----------------------------
-  // LOCATION DROPDOWN (PREMIUM)
-  // -----------------------------
-  // -----------------------------
-// 🔥 RESPONSIVE PREMIUM DROPDOWN
-// -----------------------------
-  Widget _locationSelector() {
-    final width = MediaQuery.of(context).size.width;
-
-    // Dynamic sizes for all devices
-    double fontSize = width * 0.032;   // 3.2% of width
-    double iconSize = width * 0.05;    // 5% of width
-    double horizontalPad = width * 0.02;
-
+  // ------------------------------------------------
+  // LOCATION
+  // ------------------------------------------------
+  Widget _locationSelector(double w) {
     return Consumer<HomeController>(
-      builder: (context, home, _) {
+      builder: (_, home, __) {
         final locations =
             Provider.of<LocationController>(context, listen: false).locations;
 
-        return Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: horizontalPad,
-            vertical: width * 0.01,
-          ),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.18),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.3),
-              width: 1,
+        return SizedBox(
+          height: w * 0.092, // 🔥 slightly more height
+          child: Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: w * 0.02,
+              vertical: w * 0.006,
             ),
-          ),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(.18),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: home.selectedLocation,
+                isExpanded: true,
+                icon: Icon(
+                  Icons.keyboard_arrow_down,
+                  color: Colors.white,
+                  size: w * 0.047,
+                ),
+                dropdownColor: Colors.white,
+                onChanged: (v) => home.setLocation(v!),
 
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: home.selectedLocation,
-              isExpanded: true,
-              icon: Icon(
-                Icons.keyboard_arrow_down_rounded,
-                color: Colors.white,
-                size: iconSize,
-              ),
-
-              dropdownColor: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-
-              /// when user selects new location
-              onChanged: (value) => home.setLocation(value!),
-
-              /// CLOSED DROPDOWN TEXT (WHITE)
-              selectedItemBuilder: (_) {
-                return locations.map((loc) {
-                  return Align(
-                    alignment: Alignment.centerLeft,
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.location_on_rounded,
-                          color: Colors.white,
-                          size: iconSize * 0.8,
-                        ),
-                        SizedBox(width: width * 0.015),
-                        Flexible(
-                          child: Text(
-                            loc,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: fontSize,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList();
-              },
-
-              /// OPEN DROPDOWN TEXT (BLACK)
-              items: locations.map((loc) {
-                return DropdownMenuItem(
-                  value: loc,
-                  child: Row(
+                selectedItemBuilder: (_) => locations.map((loc) {
+                  return Row(
                     children: [
                       Icon(
                         Icons.location_on,
-                        color: Colors.blueAccent,
-                        size: iconSize * 0.8,
+                        color: Colors.white,
+                        size: w * 0.039,
                       ),
-                      SizedBox(width: width * 0.02),
+                      SizedBox(width: w * 0.012),
                       Expanded(
                         child: Text(
                           loc,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: Colors.black87,
+                            color: Colors.white,
+                            fontSize: w * 0.034,
                             fontWeight: FontWeight.w600,
-                            fontSize: fontSize,
                           ),
                         ),
                       ),
                     ],
-                  ),
-                );
-              }).toList(),
+                  );
+                }).toList(),
+
+                items: locations.map((loc) {
+                  return DropdownMenuItem(
+                    value: loc,
+                    child: Text(
+                      loc,
+                      style: TextStyle(
+                        fontSize: w * 0.035,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
             ),
           ),
         );
@@ -348,83 +274,63 @@ class _MainScreenState extends State<MainScreen>
   }
 
 
-  // ---------------------------------------
-  // AUTO SCROLL ORDERS (SLIM MODERN BAR)
-  // ---------------------------------------
-  bool _userScrolling = false;
-  Timer? _resumeTimer;
 
-  Widget _buildAutoScrollOrders() {
+
+
+  // ------------------------------------------------
+  // AUTO SCROLL ORDERS
+  // ------------------------------------------------
+  Widget _buildAutoScrollOrders(double w) {
     return Consumer<OrderController>(
-      builder: (_, orderCtrl, __) {
-        final running = orderCtrl.orders
-            .where((o) => [2, 5].contains(o.status))
-            .toList();
+      builder: (_, ctrl, __) {
+        final running =
+        ctrl.orders.where((o) => [2, 5].contains(o.status)).toList();
 
-        if (running.isEmpty) return const SizedBox(height: 0);
+        if (running.isEmpty) return const SizedBox.shrink();
 
-        if (_scrollController == null) {
-          _scrollController = ScrollController();
-
-          // 👇 Listen for manual scroll
-          _scrollController!.addListener(() {
-            final pos = _scrollController!.position;
-
-            if (pos.isScrollingNotifier.value && !_userScrolling) {
-              // USER START SCROLLING → stop auto-scroll
+        _scrollController ??= ScrollController()
+          ..addListener(() {
+            if (_scrollController!.position.isScrollingNotifier.value &&
+                !_userScrolling) {
               _userScrolling = true;
               _scrollTimer?.cancel();
             }
-
-            if (!pos.isScrollingNotifier.value && _userScrolling) {
-              // USER STOPPED SCROLLING → restart auto-scroll after 2 sec
+            if (!_scrollController!.position.isScrollingNotifier.value &&
+                _userScrolling) {
               _userScrolling = false;
-              _resumeTimer?.cancel();
-              _resumeTimer = Timer(const Duration(seconds: 2), () {
-                _startAutoScroll();
-              });
+              _resumeTimer = Timer(
+                const Duration(seconds: 2),
+                _startAutoScroll,
+              );
             }
           });
 
-          WidgetsBinding.instance.addPostFrameCallback((_) => _startAutoScroll());
-        }
-
-        return Container(
-          height: 42,
-          margin: const EdgeInsets.only(bottom: 4),
+        return SizedBox(
+          height: w * 0.12,
           child: ListView.builder(
-            scrollDirection: Axis.horizontal,
             controller: _scrollController,
+            scrollDirection: Axis.horizontal,
             itemCount: running.length,
             itemBuilder: (_, i) {
               final o = running[i];
-
               return Container(
-                width: 70,
-                margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
+                width: w * 0.18,
+                margin: EdgeInsets.all(w * 0.015),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
                   gradient: const LinearGradient(
                     colors: [Color(0xff0052cc), Color(0xff1e3c72)],
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(.2),
-                      blurRadius: 5,
-                    )
-                  ],
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      "ID:${o.orderId}",
-                      style: const TextStyle(color: Colors.white, fontSize: 10),
-                    ),
-                    Text(
-                      "${o.otp ?? 'N/A'}",
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
-                    ),
+                    Text("ID:${o.orderId}",
+                        style: TextStyle(
+                            color: Colors.white, fontSize: w * 0.028)),
+                    Text("${o.otp ?? 'N/A'}",
+                        style: TextStyle(
+                            color: Colors.white, fontSize: w * 0.032)),
                   ],
                 ),
               );
@@ -435,58 +341,57 @@ class _MainScreenState extends State<MainScreen>
     );
   }
 
-
-  // ---------------------------------------
-  // FLOATING BOTTOM NAVBAR (ZEPT0 STYLE)
-  // ---------------------------------------
-  Widget _buildFloatingBottomBar() {
+  // ------------------------------------------------
+  // BOTTOM NAV
+  // ------------------------------------------------
+  Widget _buildBottomNav(double w) {
     return Consumer<CartProvider>(
       builder: (_, cart, __) {
         return Container(
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(w * 0.06),
+            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(.15),
-                blurRadius: 20,
+                blurRadius: 15,
               ),
             ],
           ),
           child: BottomNavigationBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            type: BottomNavigationBarType.fixed,
-            selectedItemColor: Colors.blueAccent,
-            unselectedItemColor: Colors.grey,
             currentIndex: _currentIndex,
             onTap: (i) => setState(() => _currentIndex = i),
-
+            selectedItemColor: Colors.blueAccent,
+            unselectedItemColor: Colors.grey,
+            selectedFontSize: w * 0.035,
+            unselectedFontSize: w * 0.03,
             items: [
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.home_rounded),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.home_rounded, size: w * 0.065),
                 label: "Home",
               ),
-
-              const BottomNavigationBarItem(
-                icon: Icon(Icons.list_alt_rounded),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.list_alt_rounded, size: w * 0.065),
                 label: "Orders",
               ),
-
               BottomNavigationBarItem(
                 icon: Stack(
                   children: [
-                    const Icon(Icons.shopping_cart_rounded),
+                    Icon(Icons.shopping_cart, size: w * 0.065),
                     if (cart.cartItems.isNotEmpty)
                       Positioned(
                         right: 0,
                         child: CircleAvatar(
-                          radius: 8,
+                          radius: w * 0.022,
                           backgroundColor: Colors.red,
                           child: Text(
                             "${cart.cartItems.length}",
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 10),
+                            style: TextStyle(
+                              fontSize: w * 0.022,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ),
@@ -501,184 +406,266 @@ class _MainScreenState extends State<MainScreen>
     );
   }
 
-  // ---------------------------------------
-  // PREMIUM DRAWER (URBAN COMPANY STYLE)
-  // ---------------------------------------
-  Drawer _buildDrawer() {
+  // ------------------------------------------------
+  // DRAWER
+  // ------------------------------------------------
+  Drawer _buildDrawer(double w) {
     return Drawer(
-      child: ListView(
-        children: [
-          Consumer<UserController>(
-            builder: (_, u, __) {
-              return UserAccountsDrawerHeader(
+      child: SafeArea(
+        child: Column(
+          children: [
+            /// 🔥 HEADER
+            Consumer<UserController>(
+              builder: (_, u, __) => Container(
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(
+                  horizontal: w * 0.05,
+                  vertical: w * 0.06,
+                ),
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     colors: [Color(0xff306694), Color(0xff9e5ccb)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
                 ),
-                currentAccountPicture: const CircleAvatar(
-                  backgroundImage: AssetImage("assets/images/profile.png"),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: w * 0.085,
+                      backgroundImage:
+                      const AssetImage("assets/images/profile.png"),
+                    ),
+                    SizedBox(width: w * 0.04),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            u.user?.username ?? "User",
+                            style: TextStyle(
+                              fontSize: w * 0.045,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          SizedBox(height: w * 0.01),
+                          Text(
+                            u.user?.email ?? "",
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: w * 0.034,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                accountName: Text(
-                  u.user?.username ?? "User",
-                  style: const TextStyle(color: Colors.white),
-                ),
-                accountEmail: Text(
-                  u.user?.email ?? u.user?.phone ?? "",
-                  style: const TextStyle(color: Colors.white70),
-                ),
-              );
-            },
-          ),
+              ),
+            ),
 
-          _drawerItem(Icons.home, "Home", () {
-            setState(() => _currentIndex = 0);
-            Navigator.pop(context);
-          }),
+            /// 🔥 MENU LIST
+            Expanded(
+              child: ListView(
+                padding: EdgeInsets.only(top: w * 0.02),
+                children: [
+                  _drawerTile(
+                    w,
+                    Icons.home_rounded,
+                    "Home",
+                        () {
+                      setState(() => _currentIndex = 0);
+                      Navigator.pop(context);
+                    },
+                  ),
 
-          _drawerItem(Icons.person, "Profile", () {
-            Navigator.push(
-                context,
-                PageRouteBuilder(
-                  transitionDuration: Duration(milliseconds: 350),
-                  pageBuilder: (_, __, ___) => ProfileScreen(),
-                  transitionsBuilder: (_, animation, __, child) {
-                    final offset = Tween(begin: Offset(1, 0), end: Offset.zero)
-                        .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
-                    return SlideTransition(position: offset, child: child);
-                  },
-                ));
-          }),
+                  _drawerTile(
+                    w,
+                    Icons.person_rounded,
+                    "Profile",
+                        () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => ProfileScreen()),
+                      );
+                    },
+                  ),
 
-          _drawerItem(Icons.rule, "Terms & Conditions", () {
-            Navigator.push(
-                context,
-                PageRouteBuilder(
-                  transitionDuration: Duration(milliseconds: 350),
-                  pageBuilder: (_, __, ___) => TermsConditionsScreen(),
-                  transitionsBuilder: (_, animation, __, child) {
-                    final offset = Tween(begin: Offset(1, 0), end: Offset.zero)
-                        .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
-                    return SlideTransition(position: offset, child: child);
-                  },
-                ));          }),
+                  Divider(thickness: 1, indent: w * 0.05, endIndent: w * 0.05),
 
-          _drawerItem(Icons.privacy_tip, "Privacy Policy", () {
-            Navigator.push(
-                context,
-                PageRouteBuilder(
-                  transitionDuration: Duration(milliseconds: 350),
-                  pageBuilder: (_, __, ___) => PrivacyPolicyScreen(),
-                  transitionsBuilder: (_, animation, __, child) {
-                    final offset = Tween(begin: Offset(1, 0), end: Offset.zero)
-                        .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
-                    return SlideTransition(position: offset, child: child);
-                  },
-                ));          }),
+                  _drawerTile(
+                    w,
+                    Icons.rule_rounded,
+                    "Terms & Conditions",
+                        () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => TermsConditionsScreen()),
+                      );
+                    },
+                  ),
 
-          _drawerItem(Icons.cancel, "Cancellation Policy", () {
-            Navigator.push(
-                context,
-                PageRouteBuilder(
-                  transitionDuration: Duration(milliseconds: 350),
-                  pageBuilder: (_, __, ___) => CancellationPolicyScreen(),
-                  transitionsBuilder: (_, animation, __, child) {
-                    final offset = Tween(begin: Offset(1, 0), end: Offset.zero)
-                        .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
-                    return SlideTransition(position: offset, child: child);
-                  },
-                ));          }),
+                  _drawerTile(
+                    w,
+                    Icons.privacy_tip_rounded,
+                    "Privacy Policy",
+                        () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => PrivacyPolicyScreen()),
+                      );
+                    },
+                  ),
 
-          const Divider(),
+                  _drawerTile(
+                    w,
+                    Icons.cancel_rounded,
+                    "Cancellation Policy",
+                        () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => CancellationPolicyScreen()),
+                      );
+                    },
+                  ),
 
-          _drawerItem(Icons.delete_forever, "Delete Account", () {
-            Navigator.pop(context);
-            _confirmDeleteAccount(context);
-          }, color: Colors.red),
+                  SizedBox(height: w * 0.06),
 
-          _drawerItem(Icons.logout, "Logout", () {
-            _confirmLogout(context);
-          }, color: Colors.red),
-        ],
+                  /// 🔥 DANGER ZONE
+                  Divider(thickness: 1, indent: w * 0.05, endIndent: w * 0.05),
+
+                  _drawerTile(
+                    w,
+                    Icons.logout_rounded,
+                    "Logout",
+                        () => _confirmLogout(context),
+                    color: Colors.redAccent,
+                  ),
+
+                  _drawerTile(
+                    w,
+                    Icons.delete_forever_rounded,
+                    "Delete Account",
+                        () => _confirmDeleteAccount(context),
+                    color: Colors.red,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  ListTile _drawerItem(IconData icon, String title, VoidCallback onTap,
-      {Color color = Colors.black87}) {
-    return ListTile(
-      leading: Icon(icon, color: color),
-      title: Text(title, style: TextStyle(color: color)),
+  Widget _drawerTile(
+      double w,
+      IconData icon,
+      String title,
+      VoidCallback onTap, {
+        Color color = Colors.black87,
+      }) {
+    return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: w * 0.05,
+          vertical: w * 0.035,
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: w * 0.06, color: color),
+            SizedBox(width: w * 0.04),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: w * 0.04,
+                  fontWeight: FontWeight.w500,
+                  color: color,
+                ),
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: w * 0.035,
+              color: Colors.grey.shade400,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  // ---------------------------------------
-  // LOGOUT CONFIRMATION
-  // ---------------------------------------
-  void _confirmLogout(BuildContext context) {
+
+  void _confirmDeleteAccount(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
+
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text("Log out"),
-        content: const Text("Are you sure you want to logout?"),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded,
+                color: Colors.red, size: w * 0.07),
+            SizedBox(width: w * 0.02),
+            const Text("Delete Account"),
+          ],
+        ),
+        content: const Text(
+          "This action is permanent.\nYour account and all data will be deleted.\n\nDo you want to continue?",
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel")),
-          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
             onPressed: () async {
               Navigator.pop(context);
 
+              // 🔥 Call API / Controller method
+              await Provider.of<UserController>(
+                context,
+                listen: false,
+              ).deleteAccount(context);
 
-
-              Provider.of<OrderController>(context, listen: false)
-                  .clearOrders();
-
-              await Provider.of<UserController>(context, listen: false)
-                  .logout();
-
-              Navigator.of(context).pushReplacement(
+              // 🔁 Redirect to Login
+              Navigator.pushAndRemoveUntil(
+                context,
                 MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (_) => false,
               );
             },
-            child: const Text("Logout", style: TextStyle(color: Colors.red)),
+            child: const Text(
+              "Delete",
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
     );
   }
 
-  // ---------------------------------------
-  // DELETE ACCOUNT CONFIRMATION
-  // ---------------------------------------
-  void _confirmDeleteAccount(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Delete Account"),
-        content: const Text(
-            "Are you sure you want to permanently delete your account?"),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel")),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Provider.of<UserController>(context, listen: false)
-                  .deleteAccount(context);
-            },
-            child: const Text("Delete", style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
 
-  // ---------------------------------------
-  // EXIT CONFIRMATION
-  // ---------------------------------------
+  // ------------------------------------------------
+  // EXIT
+  // ------------------------------------------------
   Future<bool> _showExitDialog(BuildContext context) async {
     return await showDialog(
       context: context,
@@ -696,5 +683,35 @@ class _MainScreenState extends State<MainScreen>
       ),
     ) ??
         false;
+  }
+
+  // ------------------------------------------------
+  // LOGOUT
+  // ------------------------------------------------
+  void _confirmLogout(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Logout"),
+        content: const Text("Are you sure?"),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel")),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await Provider.of<UserController>(context, listen: false)
+                  .logout();
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+              );
+            },
+            child: const Text("Logout", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
   }
 }

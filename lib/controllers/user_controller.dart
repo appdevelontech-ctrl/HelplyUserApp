@@ -197,17 +197,17 @@ class UserController extends ChangeNotifier {
       }
     }
   }
-
   Future<void> verifyOtp(String otp, BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
+
     _hashOtp ??= prefs.getString('hashOtp');
     _isNewUser = prefs.getBool('isNewUser') ?? false;
     _phone ??= prefs.getString('phone');
 
+    /// ❌ Missing required data
     if (_hashOtp == null || _phone == null) {
       _isLoading = false;
       _errorMessage = 'OTP or phone number not found. Please resend OTP.';
-      EasyLoading.showError('$_errorMessage');
       notifyListeners();
       return;
     }
@@ -215,79 +215,84 @@ class UserController extends ChangeNotifier {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
-    EasyLoading.show(status: 'Verifying OTP...');
 
     try {
       final verifyResult = await _apiServices.verifyOtp(otp, _hashOtp!);
-      print("✅ verifyOtp response: $verifyResult");
+      debugPrint("✅ verifyOtp response: $verifyResult");
 
+      /// ✅ OTP VERIFIED
       if (verifyResult['success'] == true) {
         final userId = prefs.getString('userId') ?? '';
 
         if (_isNewUser) {
-          final signupResult = await _apiServices.signupNewUser(_phone!, _gToken!);
-          print("✅ signupNewUser response: $signupResult");
+          final signupResult =
+          await _apiServices.signupNewUser(_phone!, _gToken!);
+
+          debugPrint("✅ signupNewUser response: $signupResult");
 
           if (signupResult['success'] == true) {
             final newUserId = signupResult['userId'];
             final newPhone = signupResult['phone'];
+
             if (newUserId == null || newPhone == null) {
-              throw Exception('User ID or phone number missing in signup response');
+              _errorMessage = "Account created but data missing";
+              return;
             }
+
             await prefs.setString('userId', newUserId);
             await prefs.setString('phone', newPhone);
             await prefs.setBool('isLoggedIn', true);
 
-
-
-
-
             await fetchUserDetails(newUserId);
+
             _isLoggedIn = true;
             _isLoading = false;
             notifyListeners();
-            EasyLoading.showSuccess('OTP verified and account created!');
 
             Navigator.pushAndRemoveUntil(
               context,
-              MaterialPageRoute(builder: (context) => const MainScreen()),
-                  (Route<dynamic> route) => false,
+              MaterialPageRoute(builder: (_) => const MainScreen()),
+                  (_) => false,
             );
           } else {
-            throw Exception(signupResult['message'] ?? 'Failed to sign up user');
+            _errorMessage =
+                signupResult['message'] ?? 'Failed to create account';
           }
         } else {
-          if (userId.isNotEmpty) {
-            await fetchUserDetails(userId);
-            await prefs.setBool('isLoggedIn', true);
-            _isLoggedIn = true;
-            _isLoading = false;
-            notifyListeners();
-            EasyLoading.showSuccess('OTP verified successfully!');
-
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const MainScreen()),
-            );
-          } else {
-            throw Exception('User ID not found in SharedPreferences');
+          if (userId.isEmpty) {
+            _errorMessage = 'User session expired. Please login again.';
+            return;
           }
+
+          await fetchUserDetails(userId);
+          await prefs.setBool('isLoggedIn', true);
+
+          _isLoggedIn = true;
+          _isLoading = false;
+          notifyListeners();
+
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const MainScreen()),
+          );
         }
-      } else {
-        throw Exception(verifyResult['message'] ?? 'Invalid OTP');
       }
-    } catch (e) {
+
+      /// ❌ WRONG OTP (NORMAL FLOW – NO EXCEPTION)
+      else {
+        _errorMessage = verifyResult['message'] ?? 'OTP not verified';
+      }
+    }
+
+    /// ❌ REAL ERROR (NETWORK / SERVER)
+    catch (e) {
+      debugPrint('❌ verifyOtp error: $e');
+      _errorMessage = 'OTP not verified. Please try again';
+    }
+
+    finally {
       _isLoading = false;
-      _errorMessage = e.toString().replaceFirst('Exception: ', '');
-      EasyLoading.showError('OTP verification failed: $_errorMessage');
       notifyListeners();
-      print('❌ verifyOtp error: $e');
-    } finally {
-      if (_isLoading) {
-        _isLoading = false;
-        notifyListeners();
-        EasyLoading.dismiss();
-      }
     }
   }
 

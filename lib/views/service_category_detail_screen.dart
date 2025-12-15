@@ -173,21 +173,35 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
                   // 🔥 GRID (Zepto Style)
                   LayoutBuilder(
                     builder: (_, constraints) {
-                      int count = constraints.maxWidth ~/ 180;
-                      if (count < 1) count = 1;
-                      if (count > 2) count = 2;
+                      double width = constraints.maxWidth;
+
+                      int crossAxisCount;
+                      double childAspectRatio;
+
+                      if (width >= 900) {
+                        crossAxisCount = 4;          // big tablet
+                        childAspectRatio = 0.70;
+                      } else if (width >= 600) {
+                        crossAxisCount = 3;          // tablet
+                        childAspectRatio = 0.68;
+                      } else if (width >= 360) {
+                        crossAxisCount = 2;          // normal phones
+                        childAspectRatio = 0.66;
+                      } else {
+                        crossAxisCount = 1;          // very small phones
+                        childAspectRatio = 0.75;
+                      }
 
                       return GridView.builder(
                         shrinkWrap: true,
-                        physics: NeverScrollableScrollPhysics(),
+                        physics: const NeverScrollableScrollPhysics(),
                         itemCount: products.length,
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: count,
+                          crossAxisCount: crossAxisCount,
                           crossAxisSpacing: 14,
                           mainAxisSpacing: 14,
-                          childAspectRatio: 0.68,
+                          childAspectRatio: childAspectRatio,
                         ),
-
                         itemBuilder: (_, i) {
                           final p = products[i];
                           return ProductCard(
@@ -203,6 +217,7 @@ class ServiceCategoryDetailScreen extends StatelessWidget {
                       );
                     },
                   ),
+
 
                   const SizedBox(height: 30),
                 ],
