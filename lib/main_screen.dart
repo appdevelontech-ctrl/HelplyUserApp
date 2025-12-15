@@ -547,7 +547,8 @@ class _MainScreenState extends State<MainScreen>
                         .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
                     return SlideTransition(position: offset, child: child);
                   },
-                ));          }),
+                ));
+          }),
 
           _drawerItem(Icons.rule, "Terms & Conditions", () {
             Navigator.push(
@@ -629,8 +630,7 @@ class _MainScreenState extends State<MainScreen>
             onPressed: () async {
               Navigator.pop(context);
 
-              await Provider.of<SocketController>(context, listen: false)
-                  .clearUserDataOnLogout();
+
 
               Provider.of<OrderController>(context, listen: false)
                   .clearOrders();

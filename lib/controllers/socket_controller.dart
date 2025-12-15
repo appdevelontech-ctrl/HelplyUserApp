@@ -1,245 +1,266 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../controllers/order_controller.dart';
 
-class SocketController with ChangeNotifier {
+class SocketController extends ChangeNotifier {
   static final SocketController _instance = SocketController._internal();
   factory SocketController() => _instance;
   SocketController._internal();
 
-  IO.Socket? socket;
+  IO.Socket? _socket;
+
+  final String _baseUrl = "wss://backend-olxs.onrender.com";
+
   bool _isConnected = false;
-  bool _isDisposed = false;
-  final List<Map<String, dynamic>> _pendingMessages = [];
-  int _reconnectionAttempts = 0;
-  static const int _maxReconnectionAttempts = 9999;
+  bool _isConnecting = false;
+  bool _disposed = false;
 
-  final Set<String> _liveOrders = {};
-  OrderController? orderController;
+  int _reconnectAttempts = 0;
+  static const int _maxReconnectAttempts = 9999;
 
+  // ============================================================
+  // 🔔 CALLBACKS
+  // ============================================================
 
-  /// Global callback for maid_started_order
-  void Function(String orderId, Map<String, dynamic> maidInfo)? onMaidStartedOrder;
+  /// 🔔 Order create / status / assign events
+  void Function(String orderId, Map<String, dynamic> orderInfo)?
+  onOrderEvent;
 
-  /// Attach OrderController to update orders automatically
-  void attachOrderController(OrderController controller) {
-    orderController = controller;
-  }
+  /// 📍 Live maid tracking
+  void Function(String orderId, Map<String, dynamic> liveInfo)?
+  onLiveTracking;
 
   bool get isConnected => _isConnected;
-  bool isOrderLive(String orderId) => _liveOrders.contains(orderId);
 
-  /// Connect to socket
+  // ============================================================
+  // 🔌 CONNECT
+  // ============================================================
+
   void connect() {
-    if (_isDisposed) return;
-    if (socket != null && socket!.connected) return;
+    if (_disposed || _isConnected || _isConnecting) return;
 
-    socket = IO.io(
-      'wss://backend-olxs.onrender.com',
+    _isConnecting = true;
+
+    _socket = IO.io(
+      _baseUrl,
       IO.OptionBuilder()
           .setTransports(['websocket'])
           .enableReconnection()
+          .setReconnectionAttempts(10)
           .setReconnectionDelay(2000)
-          .setReconnectionAttempts(_maxReconnectionAttempts)
           .enableForceNew()
-          .enableAutoConnect()
-          .setTimeout(20000)
           .build(),
     );
 
-    socket?.onConnect((_) async {
+    _socket!.onConnect((_) {
       _isConnected = true;
-      _reconnectionAttempts = 0;
+      _isConnecting = false;
+      _reconnectAttempts = 0;
+      debugPrint("🟢 SOCKET CONNECTED");
       notifyListeners();
-
-      for (var msg in _pendingMessages) socket!.emit('chat message', msg);
-      _pendingMessages.clear();
-      print('🔌 Socket connected ✅');
-
-      // Load persisted maid info on reconnect
-      await _loadPersistedMaidInfo();
     });
 
-    socket?.onDisconnect((_) {
-      _isConnected = false;
-      notifyListeners();
-      print('🔌 Socket disconnected ❌');
-      _reconnect();
-    });
+    // ============================================================
+    // 📩 MAIN SOCKET LISTENER
+    // ============================================================
 
-    socket?.onConnectError((error) {
-      _isConnected = false;
-      notifyListeners();
-      print('❌ Socket connect error: $error');
-      _reconnect();
-    });
+    _socket!.on('chat message', (data) async {
+      if (_disposed) return;
 
-    socket?.onError((error) {
-      print('❌ Socket error: $error');
-    });
+      if (data == null || data is! Map<String, dynamic>) {
+        debugPrint("⛔ INVALID SOCKET PAYLOAD → $data");
+        return;
+      }
 
-    socket?.on('chat message', (data) async {
-      if (data is! Map<String, dynamic>) return;
+      final String? type = data['type']?.toString();
 
-      final orderData = data['order'] as Map<String, dynamic>? ?? {};
-      final orderDetails = orderData['orderDetails'] as Map<String, dynamic>? ?? {};
+      debugPrint("📨 SOCKET MESSAGE RECEIVED → type=$type");
+      debugPrint("📦 RAW DATA → $data");
 
-      // yahan se jo aa raha hai, wohi use kar rahe
-      final orderId = (orderData['orderId'] ??
-          orderDetails['orderId'] ??
-          orderData['_id'] ??
-          orderDetails['_id'])
-          .toString();
+      // ==========================================================
+      // 📍 LIVE TRACKING (maid → user)
+      // ==========================================================
+      if (type == 'maid_live_location') {
+        final orderId = data['orderId']?.toString();
 
-      if (orderId.isEmpty) return;
+        if (orderId == null || orderId.isEmpty) {
+          debugPrint("⛔ LIVE TRACK WITHOUT ORDER ID");
+          return;
+        }
 
-      final maidLat = _parseDouble(orderData['maidLat']);
-      final maidLng = _parseDouble(orderData['maidLng']);
+        final lat = _parseDouble(data['maidLat'] ?? data['lat']);
+        final lng = _parseDouble(data['maidLng'] ?? data['lng']);
 
-      final maidInfo = <String, dynamic>{
-        'maidName': orderData['maidName'] ?? 'Unknown Maid',
-        'maidPhone': orderData['maidPhone'] ?? '',
-        'maidEmail': orderData['maidEmail'] ?? '',
-        'maidLat': maidLat,
-        'maidLng': maidLng,
-        'status': orderData['status'] ?? 'Started',
+        if (lat == 0 || lng == 0) {
+          debugPrint("⛔ INVALID MAID LOCATION → lat=$lat lng=$lng");
+          return;
+        }
+
+        final liveInfo = {
+          'orderId': orderId,
+          'maidName': data['maidName'] ?? 'Maid',
+          'maidPhone': data['maidPhone'] ?? '',
+          'maidLat': lat,
+          'maidLng': lng,
+          'updatedAt': DateTime.now().toIso8601String(),
+        };
+
+        debugPrint(
+            "📡 LIVE TRACK UPDATE → order=$orderId → ($lat,$lng)");
+
+        // 💾 persist last location
+        await _saveLiveTracking(orderId, liveInfo);
+
+        // 🔔 notify UI
+        if (onLiveTracking != null) {
+          debugPrint("🚀 onLiveTracking CALLBACK FIRED");
+          onLiveTracking!(orderId, liveInfo);
+        } else {
+          debugPrint("⚠️ onLiveTracking CALLBACK IS NULL");
+        }
+
+        return; // ⛔ IMPORTANT: stop here
+      }
+
+      // ==========================================================
+      // 🔔 ORDER / NOTIFICATION EVENTS
+      // ==========================================================
+      final orderData =
+      (data['order'] is Map<String, dynamic>)
+          ? data['order'] as Map<String, dynamic>
+          : <String, dynamic>{};
+
+      final orderId = (data['orderId'] ??
+          orderData['orderId'] ??
+          orderData['_id'])
+          ?.toString();
+
+      if (orderId == null || orderId.isEmpty) {
+        debugPrint("⛔ ORDER EVENT WITHOUT ORDER ID");
+        return;
+      }
+
+      final orderInfo = {
+        'orderId': orderId,
+        'status': orderData['status'] ?? data['status'],
+        'maidName': orderData['maidName'],
+        'maidPhone': orderData['maidPhone'],
+        'maidLat': _parseDouble(orderData['maidLat']),
+        'maidLng': _parseDouble(orderData['maidLng']),
       };
 
-      print('📡 Received from socket: $maidInfo');
+      debugPrint("🔔 ORDER EVENT → order=$orderId");
+      debugPrint("📦 ORDER INFO → $orderInfo");
 
-      // live flag
-      updateOrderLiveStatus(orderId, true);
+      await _saveOrderInfo(orderId, orderInfo);
 
-      // ✅ PEHLE OrderController + prefs update karenge
-      if (orderController != null) {
-        await orderController!.updateOrderStatusFromSocket(
-          orderId,
-          maidInfo['status'].toString(),
-          maidLat,
-          maidLng,
-          maidName: maidInfo['maidName'],
-          maidPhone: maidInfo['maidPhone'],
-          maidEmail: maidInfo['maidEmail'],
-        );
-      }
-
-      // ✅ phir apna global storage (per user)
-      await _persistMaidInfo(orderId, maidInfo);
-
-      // ✅ AB callback call karo (ab data UI mein ready hai)
-      if (onMaidStartedOrder != null) {
-        print("⚡ REAL-TIME UPDATE for $orderId");
-        onMaidStartedOrder!(orderId, maidInfo);
+      if (onOrderEvent != null) {
+        debugPrint("🚀 onOrderEvent CALLBACK FIRED");
+        onOrderEvent!(orderId, orderInfo);
+      } else {
+        debugPrint("⚠️ onOrderEvent CALLBACK IS NULL");
       }
     });
 
+
+    // ============================================================
+    // 🔄 DISCONNECT & RECONNECT
+    // ============================================================
+
+    _socket!.onDisconnect((_) {
+      _isConnected = false;
+      _isConnecting = false;
+      debugPrint("🔴 SOCKET DISCONNECTED");
+      notifyListeners();
+      _attemptReconnect();
+    });
+
+    _socket!.onConnectError((e) {
+      _isConnected = false;
+      _isConnecting = false;
+      debugPrint("❌ SOCKET CONNECT ERROR: $e");
+      _attemptReconnect();
+    });
+
+    _socket!.connect();
   }
 
-  double _parseDouble(dynamic value) {
-    if (value == null) return 0.0;
-    if (value is double) return value;
-    if (value is int) return value.toDouble();
-    if (value is String) return double.tryParse(value) ?? 0.0;
-    return 0.0;
+  // ============================================================
+  // 🔄 AUTO RECONNECT
+  // ============================================================
+
+  void _attemptReconnect() {
+    if (_disposed || _isConnected || _isConnecting) return;
+    if (_reconnectAttempts >= _maxReconnectAttempts) return;
+
+    _reconnectAttempts++;
+    Future.delayed(const Duration(seconds: 3), connect);
   }
 
-  Future<void> clearUserDataOnLogout() async {
+  // ============================================================
+  // 📤 EMIT ORDER NOTIFICATION (USER → SERVER)
+  // ============================================================
+
+  void sendOrderNotification(Map<String, dynamic> payload) {
+    if (!_isConnected) return;
+    _socket?.emit('chat message', payload);
+    debugPrint("📤 ORDER NOTIFICATION SENT → $payload");
+  }
+
+  // ============================================================
+  // 💾 STORAGE
+  // ============================================================
+
+  Future<void> _saveLiveTracking(
+      String orderId, Map<String, dynamic> data) async {
     final prefs = await SharedPreferences.getInstance();
-    final uid = prefs.getString('userId') ?? "unknown_user";
-
-    await prefs.remove("maid_info_$uid"); // 🔥 remove per-user tracking
-
-    _liveOrders.clear();
-    _pendingMessages.clear();
-    orderController?.clearOrders(); // if implemented
-    socket?.disconnect();
-
-    print("🧹 Tracking + socket cleared for user -> $uid");
-  }
-
-
-  void _reconnect() {
-    if (_reconnectionAttempts < _maxReconnectionAttempts) {
-      _reconnectionAttempts++;
-      Future.delayed(const Duration(seconds: 2), () => connect());
-    } else {
-      print('⚠️ Max reconnection attempts reached');
-    }
-  }
-
-  Future<void> sendOrderNotification(Map<String, dynamic> payload) async {
-    if (!_isConnected) {
-      _pendingMessages.add(payload);
-      return;
-    }
-    socket?.emit('chat message', payload);
-  }
-
-  void updateOrderLiveStatus(String orderId, bool isLive) {
-    if (isLive) {
-      _liveOrders.add(orderId);
-    } else {
-      _liveOrders.remove(orderId);
-    }
-    notifyListeners();
-  }
-
-  void trackOrder(String orderId) => updateOrderLiveStatus(orderId, true);
-  void stopTracking(String orderId) => updateOrderLiveStatus(orderId, false);
-
-  /// Persist maid info for each order using SharedPreferences
-  Future<void> _persistMaidInfo(String orderId, Map<String, dynamic> maidInfo) async {
-    final prefs = await SharedPreferences.getInstance();
-    final uid = prefs.getString('userId') ?? 'unknown_user';
+    final uid = prefs.getString('userId') ?? 'guest_user';
     final key = 'maid_info_$uid';
 
-    final data = prefs.getString(key) ?? '{}';
-    final Map<String, dynamic> map = jsonDecode(data);
-    map[orderId] = maidInfo;
+    final raw = prefs.getString(key) ?? '{}';
+    final map = jsonDecode(raw) as Map<String, dynamic>;
+    map[orderId] = data;
 
     await prefs.setString(key, jsonEncode(map));
-    debugPrint('💾 Maid info saved for order $orderId: $maidInfo');
   }
 
-  /// Load persisted maid info and update OrderController
-  Future<void> _loadPersistedMaidInfo() async {
-    if (orderController == null) return;
-
+  Future<void> _saveOrderInfo(
+      String orderId, Map<String, dynamic> data) async {
     final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getString('maid_info') ?? '{}';
-    final Map<String, dynamic> map = jsonDecode(data);
+    final uid = prefs.getString('userId') ?? 'guest_user';
+    final key = 'order_info_$uid';
 
-    if (map.isEmpty) return;
+    final raw = prefs.getString(key) ?? '{}';
+    final map = jsonDecode(raw) as Map<String, dynamic>;
+    map[orderId] = data;
 
-    map.forEach((orderId, maidInfo) {
-      final lat = maidInfo['maidLat'] ?? 0.0;
-      final lng = maidInfo['maidLng'] ?? 0.0;
-
-      // 🔥 Restore live status
-      updateOrderLiveStatus(orderId, true);
-
-      // 🔥 Restore to OrderController
-      orderController!.updateOrderStatusFromSocket(
-        orderId,
-        maidInfo['status'].toString(),
-        lat,
-        lng,
-        maidName: maidInfo['maidName'],
-        maidPhone: maidInfo['maidPhone'],
-        maidEmail: maidInfo['maidEmail'],
-      );
-    });
-
-    debugPrint('📌 Restored maid info + live orders: ${_liveOrders.toString()}');
+    await prefs.setString(key, jsonEncode(map));
   }
 
+  // ============================================================
+  // 🧠 HELPERS
+  // ============================================================
+
+  double _parseDouble(dynamic v) {
+    if (v == null) return 0;
+    if (v is double) return v;
+    if (v is int) return v.toDouble();
+    if (v is String) return double.tryParse(v) ?? 0;
+    return 0;
+  }
+
+  // ============================================================
+  // ❌ DISPOSE
+  // ============================================================
 
   @override
   void dispose() {
-    _isDisposed = true;
-    socket?.disconnect();
+    _disposed = true;
+    _socket?.disconnect();
+    _socket?.dispose();
+    _socket = null;
     super.dispose();
   }
 }

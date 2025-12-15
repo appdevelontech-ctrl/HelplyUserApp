@@ -13,16 +13,15 @@ class UserOrderResponse extends Equatable {
 
   factory UserOrderResponse.fromJson(Map<String, dynamic> json) {
     return UserOrderResponse(
-      success: json['success'] as bool? ?? false,
-      message: json['message'] as String? ?? '',
-      userOrder: UserOrder.fromJson(json['userOrder'] as Map<String, dynamic>? ?? {}),
+      success: json['success'] ?? false,
+      message: json['message'] ?? '',
+      userOrder: UserOrder.fromJson(json['userOrder'] ?? {}),
     );
   }
 
   @override
   List<Object?> get props => [success, message, userOrder];
 }
-
 class UserOrder extends Equatable {
   final String id;
   final List<Order> orders;
@@ -36,16 +35,18 @@ class UserOrder extends Equatable {
 
   factory UserOrder.fromJson(Map<String, dynamic> json) {
     return UserOrder(
-      id: json['_id'] as String? ?? '',
-      orders: (json['orders'] as List<dynamic>?)?.map((o) => Order.fromJson(o as Map<String, dynamic>)).toList() ?? [],
-      order: (json['order'] as Map<String, dynamic>?) != null ? Order.fromJson(json['order'] as Map<String, dynamic>) : null,
+      id: json['_id'] ?? '',
+      orders: (json['orders'] as List?)
+          ?.map((e) => Order.fromJson(e))
+          .toList() ??
+          [],
+      order: json['order'] != null ? Order.fromJson(json['order']) : null,
     );
   }
 
   @override
   List<Object?> get props => [id, orders, order];
 }
-
 class Order extends Equatable {
   final String id;
   final String mode;
@@ -57,25 +58,25 @@ class Order extends Equatable {
   final DateTime createdAt;
   final String? updatedAt;
   final int v;
+
   final List<Item> items;
   final String discount;
   final String shipping;
   final List<String> userId;
-  final String? primary;
+  final bool primary;
+
   final int leadStatus;
   final int type;
   final int lead;
   final List<dynamic> category;
   final List<dynamic> cancelId;
-  final String agentId;
+
+  final Agent? agent;
   final List<UserDetails> details;
-  final String? maidName;
-  final String? maidPhone;
-  final String? maidEmail;
-  final double? maidLat;
-  final double? maidLng;
-  final double? userLat;
-  final double? userLng;
+
+  final double? orderLat;
+  final double? orderLng;
+
 
   const Order({
     required this.id,
@@ -92,23 +93,19 @@ class Order extends Equatable {
     this.discount = '0',
     this.shipping = '0',
     this.userId = const [],
-    this.primary,
+    this.primary = false,
     this.leadStatus = 0,
     this.type = 0,
     this.lead = 0,
     this.category = const [],
     this.cancelId = const [],
-    this.agentId = '',
+    this.agent,
     this.details = const [],
-    this.maidName,
-    this.maidPhone,
-    this.maidEmail,
-    this.maidLat,
-    this.maidLng,
-    this.userLat,
-    this.userLng,
+    this.orderLat,
+    this.orderLng,
   });
 
+  // ✅ COPY WITH (FIX FOR YOUR ERROR)
   Order copyWith({
     String? id,
     String? mode,
@@ -124,21 +121,16 @@ class Order extends Equatable {
     String? discount,
     String? shipping,
     List<String>? userId,
-    String? primary,
+    bool? primary,
     int? leadStatus,
     int? type,
     int? lead,
     List<dynamic>? category,
     List<dynamic>? cancelId,
-    String? agentId,
+    Agent? agent,
     List<UserDetails>? details,
-    String? maidName,
-    String? maidPhone,
-    String? maidEmail,
-    double? maidLat,
-    double? maidLng,
-    double? userLat,
-    double? userLng,
+    double? orderLat,
+    double? orderLng,
   }) {
     return Order(
       id: id ?? this.id,
@@ -151,80 +143,60 @@ class Order extends Equatable {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       v: v ?? this.v,
-      items: items ?? List<Item>.from(this.items),
+      items: items ?? this.items,
       discount: discount ?? this.discount,
       shipping: shipping ?? this.shipping,
-      userId: userId ?? List<String>.from(this.userId),
+      userId: userId ?? this.userId,
       primary: primary ?? this.primary,
       leadStatus: leadStatus ?? this.leadStatus,
       type: type ?? this.type,
       lead: lead ?? this.lead,
-      category: category ?? List<dynamic>.from(this.category),
-      cancelId: cancelId ?? List<dynamic>.from(this.cancelId),
-      agentId: agentId ?? this.agentId,
-      details: details ?? List<UserDetails>.from(this.details),
-      maidName: maidName ?? this.maidName,
-      maidPhone: maidPhone ?? this.maidPhone,
-      maidEmail: maidEmail ?? this.maidEmail,
-      maidLat: maidLat ?? this.maidLat,
-      maidLng: maidLng ?? this.maidLng,
-      userLat: userLat ?? this.userLat,
-      userLng: userLng ?? this.userLng,
+      category: category ?? this.category,
+      cancelId: cancelId ?? this.cancelId,
+      agent: agent ?? this.agent,
+      details: details ?? this.details,
+      orderLat: orderLat ?? this.orderLat,
+      orderLng: orderLng ?? this.orderLng,
     );
   }
-
   factory Order.fromJson(Map<String, dynamic> json) {
-    double? parseDouble(dynamic val) {
-      if (val == null) return null;
-      if (val is double) return val;
-      if (val is int) return val.toDouble();
-      if (val is String) return double.tryParse(val);
-
-      return null;
-    }
-
-    int? parseInt(dynamic val) {
-      if (val == null) return null;
-      if (val is int) return val;
-      if (val is double) return val.toInt();
-      if (val is String) return int.tryParse(val);
-
-      return null;
-    }
+    double? d(val) => val == null ? null : double.tryParse(val.toString());
+    int i(val) => int.tryParse(val.toString()) ?? 0;
 
     return Order(
-      id: json['_id'] as String? ?? '',
-      mode: json['mode'] as String? ?? '',
-      totalAmount: parseDouble(json['totalAmount']) ?? 0.0,
-      payment: parseInt(json['payment']) ?? 0,
-      status: parseInt(json['status']) ?? 0,
-      orderId: parseInt(json['orderId']) ?? 0,
-      otp: parseInt(json['otp'] ?? json['OTP']), // Check both 'otp' and 'OTP'
-      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
-      updatedAt: json['updatedAt'] as String?,
-      v: parseInt(json['__v']) ?? 0,
-      items: (json['items'] as List<dynamic>?)?.map((i) => Item.fromJson(i as Map<String, dynamic>)).toList() ?? [],
-      discount: json['discount'] as String? ?? '0',
-      shipping: json['shipping'] as String? ?? '0',
-      userId: (json['userId'] as List<dynamic>?)?.cast<String>() ?? [],
-      primary: json['primary'] as String?,
-      leadStatus: parseInt(json['leadStatus']) ?? 0,
-      type: parseInt(json['type']) ?? 0,
-      lead: parseInt(json['lead']) ?? 0,
-      category: json['category'] as List<dynamic>? ?? [],
-      cancelId: json['cancelId'] as List<dynamic>? ?? [], // Fixed key to 'cancelId'
-      agentId: json['agentId'] as String? ?? '',
-      details: (json['details'] as List<dynamic>?)?.map((d) => UserDetails.fromJson(d as Map<String, dynamic>)).toList() ?? [],
-      maidName: json['maidName'] as String?,
-      maidPhone: json['maidPhone'] as String?,
-      maidEmail: json['maidEmail'] as String?,
-      maidLat: parseDouble(json['maidLat']),
-      maidLng: parseDouble(json['maidLng']),
-      userLat: parseDouble(json['userLat']),
-      userLng: parseDouble(json['userLng']),
-
+      id: json['_id'] ?? '',
+      mode: json['mode'] ?? '',
+      totalAmount: d(json['totalAmount']) ?? 0,
+      payment: i(json['payment']),
+      status: i(json['status']),
+      orderId: i(json['orderId']),
+      otp: json['OTP'] != null ? i(json['OTP']) : null,
+      createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
+      updatedAt: json['updatedAt'],
+      v: i(json['__v']),
+      items: (json['items'] as List?)
+          ?.map((e) => Item.fromJson(e))
+          .toList() ??
+          [],
+      discount: json['discount'] ?? '0',
+      shipping: json['shipping'] ?? '0',
+      userId: (json['userId'] as List?)?.cast<String>() ?? [],
+      primary: json['primary'].toString() == 'true',
+      leadStatus: i(json['leadStatus']),
+      type: i(json['type']),
+      lead: i(json['lead']),
+      category: json['category'] ?? [],
+      cancelId: json['CancelId'] ?? json['cancelId'] ?? [],
+      agent: json['agentId'] is Map ? Agent.fromJson(json['agentId']) : null,
+      details: (json['details'] as List?)
+          ?.map((e) => UserDetails.fromJson(e))
+          .toList() ??
+          [],
+      orderLat: d(json['latitude']),
+      orderLng: d(json['longitude']),
     );
   }
+
 
   @override
   List<Object?> get props => [
@@ -248,18 +220,49 @@ class Order extends Equatable {
     lead,
     category,
     cancelId,
-    agentId,
+    agent,
     details,
-    maidName,
-    maidPhone,
-    maidEmail,
-    maidLat,
-    maidLng,
-    userLat,
-    userLng,
+    orderLat,
+    orderLng,
   ];
 }
 
+
+class Agent extends Equatable {
+  final String id;
+  final String username;
+  final String phone;
+  final String email;
+  final double? latitude;
+  final double? longitude;
+
+  const Agent({
+    required this.id,
+    required this.username,
+    required this.phone,
+    required this.email,
+    this.latitude,
+    this.longitude,
+  });
+
+  factory Agent.fromJson(Map<String, dynamic> json) {
+    double? _d(val) =>
+        val == null ? null : double.tryParse(val.toString());
+
+    return Agent(
+      id: json['_id'] ?? '',
+      username: json['username'] ?? '',
+      phone: json['phone'] ?? '',
+      email: json['email'] ?? '',
+      latitude: _d(json['latitude']),
+      longitude: _d(json['longitude']),
+    );
+  }
+
+  @override
+  List<Object?> get props =>
+      [id, username, phone, email, latitude, longitude];
+}
 class UserDetails extends Equatable {
   final String username;
   final String phone;
@@ -279,17 +282,18 @@ class UserDetails extends Equatable {
 
   factory UserDetails.fromJson(Map<String, dynamic> json) {
     return UserDetails(
-      username: json['username'] as String? ?? '',
-      phone: json['phone'] as String? ?? '',
-      pincode: json['pincode'] as String? ?? '',
-      state: json['state'] as String? ?? '',
-      address: json['address'] as String? ?? '',
-      email: json['email'] as String? ?? '',
+      username: json['username'] ?? '',
+      phone: json['phone'] ?? '',
+      pincode: json['pincode'] ?? '',
+      state: json['state'] ?? '',
+      address: json['address'] ?? '',
+      email: json['email'] ?? '',
     );
   }
 
   @override
-  List<Object?> get props => [username, phone, pincode, state, address, email];
+  List<Object?> get props =>
+      [username, phone, pincode, state, address, email];
 }
 
 class Item extends Equatable {
@@ -298,13 +302,6 @@ class Item extends Equatable {
   final String image;
   final int regularPrice;
   final int price;
-  final String color;
-  final String customise;
-  final int totalQuantity;
-  final int weight;
-  final int gst;
-  final int stock;
-  final String pid;
   final int quantity;
 
   const Item({
@@ -313,57 +310,23 @@ class Item extends Equatable {
     required this.image,
     required this.regularPrice,
     required this.price,
-    required this.color,
-    required this.customise,
-    required this.totalQuantity,
-    required this.weight,
-    required this.gst,
-    required this.stock,
-    required this.pid,
     required this.quantity,
   });
 
   factory Item.fromJson(Map<String, dynamic> json) {
-    int parseInt(dynamic val) {
-      if (val == null) return 0;
-      if (val is int) return val;
-      if (val is double) return val.toInt();
-      if (val is String) return int.tryParse(val) ?? 0;
-
-      return 0;
-    }
+    int i(val) => int.tryParse(val.toString()) ?? 0;
 
     return Item(
-      id: json['id'] as String? ?? '',
-      title: json['title'] as String? ?? '',
-      image: json['image'] as String? ?? '',
-      regularPrice: parseInt(json['regularPrice']),
-      price: parseInt(json['price']),
-      color: json['color'] as String? ?? '',
-      customise: json['customise'] as String? ?? '',
-      totalQuantity: parseInt(json['TotalQuantity']),
-      weight: parseInt(json['weight']),
-      gst: parseInt(json['gst']),
-      stock: parseInt(json['stock']),
-      pid: json['pid'] as String? ?? '',
-      quantity: parseInt(json['quantity']),
+      id: json['id'] ?? '',
+      title: json['title'] ?? '',
+      image: json['image'] ?? '',
+      regularPrice: i(json['regularPrice']),
+      price: i(json['price']),
+      quantity: i(json['quantity']),
     );
   }
 
   @override
-  List<Object?> get props => [
-    id,
-    title,
-    image,
-    regularPrice,
-    price,
-    color,
-    customise,
-    totalQuantity,
-    weight,
-    gst,
-    stock,
-    pid,
-    quantity,
-  ];
+  List<Object?> get props =>
+      [id, title, image, regularPrice, price, quantity];
 }

@@ -6,10 +6,11 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:google_place/google_place.dart';
-import 'package:user_app/main_screen.dart';
+
 import '../controllers/cart_provider.dart';
 import '../controllers/socket_controller.dart';
 import '../controllers/user_controller.dart';
+import '../main_screen.dart';
 import '../services/api_services.dart';
 import '../models/serviceCategoryDetail.dart';
 
@@ -202,53 +203,51 @@ class _CartPageState extends State<CartPage> {
 
   Future<void> _confirmPayment() async {
     if (!mounted) return;
+
     setState(() => _isLoading = true);
-    await EasyLoading.show(status: 'Processing payment...');
-    final cartProvider = Provider.of<CartProvider>(context, listen: false);
-    final socketController = Provider.of<SocketController>(context, listen: false);
+    EasyLoading.show(status: 'Processing payment...');
+
+    final cartProvider = context.read<CartProvider>();
+    final socketController = SocketController(); // singleton
 
     try {
       final prefs = await SharedPreferences.getInstance();
       final userId = prefs.getString('userId');
-      if (userId == null) {
-        throw Exception('User ID not found. Please log in.');
+
+      if (userId == null || userId.isEmpty) {
+        throw Exception('User not logged in');
       }
 
-      String paymentMode;
-      switch (_selectedPaymentMethod) {
-        case 'UPI':
-          paymentMode = 'UPI';
-          break;
-        case 'Cash on Delivery':
-          paymentMode = 'COD';
-          break;
-        default:
-          paymentMode = 'COD';
-      }
+      // ================= PAYMENT MODE =================
+      final paymentMode =
+      _selectedPaymentMethod == 'UPI' ? 'UPI' : 'COD';
 
+      // ================= ORDER PAYLOAD =================
       final orderData = {
-        'phone': _phoneController.text,
-        'pincode': _pincodeController.text,
-        'address': _addressController.text,
-        'items': cartProvider.cartItems.map((item) => item.toJson()).toList(),
+        'phone': _phoneController.text.trim(),
+        'pincode': _pincodeController.text.trim(),
+        'address': _addressController.text.trim(),
+        'items': cartProvider.cartItems.map((e) => e.toJson()).toList(),
         'status': '1',
         'mode': paymentMode,
         'details': {
-          'username': _nameController.text,
-          'phone': _phoneController.text,
-          'pincode': _pincodeController.text,
+          'username': _nameController.text.trim(),
+          'phone': _phoneController.text.trim(),
+          'pincode': _pincodeController.text.trim(),
           'state': _selectedState,
-          'address': _addressController.text,
-          'email': _emailController.text,
+          'address': _addressController.text.trim(),
+          'email': _emailController.text.trim(),
         },
         'discount': 0,
         'shipping': 0,
         'totalAmount': cartProvider.totalPrice,
-        'primary': 'true',
+        'primary': true,
         'payment': 1,
-        'username': _nameController.text,
-        'email': _emailController.text,
-        'location': _locationController.text.isNotEmpty ? _locationController.text : _selectedState ?? '',
+        'username': _nameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'location': _locationController.text.isNotEmpty
+            ? _locationController.text
+            : (_selectedState ?? ''),
         'lat': _latitude,
         'lng': _longitude,
         'userId': userId,
@@ -256,89 +255,87 @@ class _CartPageState extends State<CartPage> {
         'verified': 1,
       };
 
-      debugPrint('📦 Order Data: ${jsonEncode(orderData)}');
+      debugPrint('📦 ORDER PAYLOAD → ${jsonEncode(orderData)}');
 
+      // ================= API CALL =================
       final result = await _apiServices.createOrder(userId, orderData);
-
       final newOrder = result['order'];
-      if (newOrder != null) {
-        final sendmsg = {
-          'userId': newOrder['userId']?[0] ?? newOrder['userId'] ?? userId,
-          'type': 'book',
-          'order': newOrder,
-          'orderId': newOrder['orderId'],
-        };
-        debugPrint('📡 Sending socket message: $sendmsg');
-        await socketController.sendOrderNotification(sendmsg);
-      } else {
-        debugPrint('⚠️ New order data is null, skipping socket notification');
+
+      if (newOrder == null) {
+        throw Exception('Order creation failed');
       }
+
+      // ================= SOCKET NOTIFICATION =================
+      final normalizedUserId = newOrder['userId'] is List
+          ? newOrder['userId'][0]
+          : newOrder['userId'];
+
+      final socketPayload = {
+        'type': 'book',
+        'orderId': newOrder['orderId'],
+        'userId': normalizedUserId ?? userId,
+        'order': newOrder,
+      };
+
+      if (socketController.isConnected) {
+        socketController.sendOrderNotification(socketPayload);
+        debugPrint('📡 SOCKET SENT → $socketPayload');
+      } else {
+        debugPrint('⚠️ Socket not connected, skipped emit');
+      }
+
+      // ================= SUCCESS =================
       cartProvider.clearCart();
-      await EasyLoading.showSuccess('Order placed successfully!');
+      EasyLoading.dismiss();
+      EasyLoading.showSuccess('Order placed successfully!');
+
       setState(() => _isLoading = false);
 
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            title: const Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.green, size: 24),
-                SizedBox(width: 8),
-                Text(
-                  'Order Confirmed',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.green),
-                ),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Your order has been placed successfully on ${DateFormat('EEEE, MMMM d, yyyy').format(DateTime.now())} at ${DateFormat('h:mm a').format(DateTime.now())} IST!',
-                  style: const TextStyle(fontSize: 16, color: Colors.black87),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'Order Status: Created',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  result['message'] ?? 'Thank you for your purchase!',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (context) => const MainScreen()),
-                        (route) => false,
-                  );
-                },
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.blue,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                child: const Text('Back to Home', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-              ),
-            ],
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      _showOrderSuccessDialog(result['message']);
+
     } catch (e) {
+      EasyLoading.dismiss();
       setState(() => _isLoading = false);
-      await EasyLoading.showError('Failed to create order: $e');
-      debugPrint('❌ Error creating order: $e');
+      EasyLoading.showError('Failed to create order');
+      debugPrint('❌ ORDER ERROR → $e');
     }
   }
+  void _showOrderSuccessDialog(String? message) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green),
+            SizedBox(width: 8),
+            Text('Order Confirmed',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          message ?? 'Your order has been placed successfully!',
+          style: const TextStyle(fontSize: 15),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const MainScreen()),
+                    (_) => false,
+              );
+            },
+            child: const Text('Back to Home'),
+          ),
+        ],
+      ),
+    );
+  }
+
 
   Widget _buildEmptyCartUI() {
     return Center(

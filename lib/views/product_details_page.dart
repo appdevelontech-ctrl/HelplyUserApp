@@ -7,12 +7,13 @@ import 'package:shimmer/shimmer.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:http/http.dart' as http;
-import 'package:user_app/services/api_services.dart';
+
 import 'dart:convert';
 import '../controllers/product_detail_controller.dart';
 import '../controllers/cart_provider.dart';
 import '../main_screen.dart';
 import '../models/serviceCategoryDetail.dart';
+import '../services/api_services.dart';
 import 'cartpage.dart';
 
 class ProductDetailsPage extends StatefulWidget {
@@ -116,6 +117,7 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
     if (width <= 1200) return width * 0.55; // Large Tablet
     return width * 0.40; // Web/Desktop
   }
+
   void _showAddToCartDialog(
       BuildContext context,
       ProductDetail product,
@@ -126,13 +128,26 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
       return;
     }
 
+
+
     final controller = context.read<ProductDetailController>();
     final homeData = controller.homeData;
 
-    DateTime now = DateTime.now();
-    List<DateTime> dateList = List.generate(11, (i) => now.add(Duration(days: i)));
+    int noOfDays = 1;
+    if (homeData != null && homeData['noOfDays'] != null) {
+      noOfDays = int.tryParse(homeData['noOfDays'].toString()) ?? 1;
+    }
 
-    DateTime? selectedDate = dateList[0];
+    DateTime now = DateTime.now();
+
+    List<DateTime> dateList = List.generate(
+      noOfDays,
+          (i) => DateTime(now.year, now.month, now.day + i),
+    );
+
+    DateTime? selectedDate = dateList.first;
+
+
     DateTime? selectedTime;
     String? selectedTimeString;
 
@@ -158,41 +173,68 @@ class _ProductDetailsPageState extends State<ProductDetailsPage> {
 
       return DateTime(date.year, date.month, date.day, hour, min);
     }
+    DateTime roundToNextSlot(DateTime time, int gapMinutes) {
+      int remainder = time.minute % gapMinutes;
+      if (remainder == 0) return time;
+      return time.add(Duration(minutes: gapMinutes - remainder));
+    }
 
     List<DateTime> generateTimesForDate(DateTime date) {
       if (homeData == null) return [];
 
-      DateTime start = parseTime(homeData['startTime'] ?? "10:00:00", date);
-      DateTime end = parseTime(homeData['endTime'] ?? "22:00:00", date);
-      DateTime nightStart = parseTime(homeData['startNightTime'] ?? "22:00:00", date);
-      DateTime nightEnd = date.add(const Duration(days: 1));
+      DateTime start =
+      parseTime(homeData['startTime'] ?? "10:00:00", date);
+
+      DateTime nightStart =
+      parseTime(homeData['startNightTime'] ?? "22:00:00", date);
+
+      DateTime nightEnd =
+      parseTime(homeData['endingNightTime'] ?? "24:00:00", date);
 
       int gap = homeData['timeGap'] ?? 30;
+      bool isToday =
+          DateTime.now().difference(date).inDays == 0;
 
-      bool isToday = now.day == date.day;
+      DateTime firstSlot;
 
-      DateTime firstSlot = isToday
-          ? DateTime.now().add(const Duration(minutes: 60))
-          : start;
+      if (isToday) {
+        int buffer = homeData['startingHour'] ?? 60;
+        DateTime baseTime =
+        DateTime.now().add(Duration(minutes: buffer));
+
+        firstSlot = homeData['roundOffTime'] == "Yes"
+            ? roundToNextSlot(baseTime, gap)
+            : baseTime;
+      } else {
+        firstSlot = start;
+      }
 
       if (firstSlot.isBefore(start)) firstSlot = start;
 
       List<DateTime> slots = [];
       DateTime curr = firstSlot;
 
-      while (curr.isBefore(end)) {
+      // ================= DAY SLOTS =================
+      while (curr.isBefore(nightStart)) {
         slots.add(curr);
         curr = curr.add(Duration(minutes: gap));
       }
 
-      if (curr.isBefore(nightStart)) curr = nightStart;
-      while (curr.isBefore(nightEnd)) {
-        slots.add(curr);
-        curr = curr.add(Duration(minutes: gap));
+      // ================= NIGHT SLOTS =================
+      if (nightCharge > 0) {
+        if (curr.isBefore(nightStart)) {
+          curr = nightStart;
+        }
+
+        while (curr.isBefore(nightEnd)) {
+          slots.add(curr);
+          curr = curr.add(Duration(minutes: gap));
+        }
       }
 
       return slots;
     }
+
 
     void updatePrice() {
       if (widget.slug == "multiday-service") {

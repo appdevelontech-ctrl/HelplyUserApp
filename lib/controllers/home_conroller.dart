@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:user_app/models/service_category.dart';
+
 import '../models/offer.dart';
+import '../models/service_category.dart';
 import '../services/api_services.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;

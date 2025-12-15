@@ -1,8 +1,9 @@
+import 'package:Helply/services/storage_service.dart';
+import 'package:Helply/views/auth/login_screen.dart';
+import 'package:Helply/views/onboarding.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:user_app/services/storage_service.dart';
-import 'package:user_app/views/auth/login_screen.dart';
-import 'package:user_app/views/onboarding.dart';
+
 import 'controllers/user_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -84,36 +85,39 @@ class _SplashScreenState extends State<SplashScreen>
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
+      backgroundColor: Colors.black,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          Positioned.fill(
-            child: Image.asset(
-              "assets/images/splash_screen.png",
-              fit: BoxFit.cover
-              ,
-            ),
-          ),
+          // 🔥 BACKGROUND
+          Container(color: Colors.black),
 
-          Container(color: Colors.black.withOpacity(0.4)),
-
+          // 🔥 CENTER LOGO
           Center(
             child: FadeTransition(
               opacity: _fadeAnimation,
               child: ScaleTransition(
                 scale: _scaleAnimation,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(height: 16),
-                    const CircularProgressIndicator(color: Colors.white),
-                  ],
+                child: Image.asset(
+                  "assets/images/splash_screen.png",
+                  width: MediaQuery.of(context).size.width * 0.65,
                 ),
               ),
+            ),
+          ),
+
+          // 🔄 LOADER
+          Positioned(
+            bottom: 60,
+            left: 0,
+            right: 0,
+            child: const Center(
+              child: CircularProgressIndicator(color: Colors.white),
             ),
           ),
         ],
       ),
     );
+
   }
 }

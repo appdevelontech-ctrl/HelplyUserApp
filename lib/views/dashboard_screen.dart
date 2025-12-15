@@ -68,36 +68,46 @@ class _DashboardScreenState extends State<DashboardScreen>
     _animationController?.dispose();
     super.dispose();
   }
+  Widget fastImage(
+      String url, {
+        double? height,
+        double? width,
+        BoxFit fit = BoxFit.cover,
+        BorderRadius? borderRadius,
+      }) {
+    return ClipRRect(
+      borderRadius: borderRadius ?? BorderRadius.zero, // 👈 important
+      child: CachedNetworkImage(
+        imageUrl: url,
+        height: height,
+        width: width,
+        fit: fit,
 
-  // ----------------------------------------------------------
-  // FAST IMAGE LOADER (Reusable)
-  // ----------------------------------------------------------
-  Widget fastImage(String url,
-      {double? height, double? width, BoxFit fit = BoxFit.cover}) {
-    return CachedNetworkImage(
-      imageUrl: url,
-      height: height,
-      width: width,
-      fit: fit,
-      fadeInDuration: const Duration(milliseconds: 150),
-      memCacheHeight: 650, // FAST & Optimized
-      memCacheWidth: 650,
-      placeholder: (_, __) => Shimmer.fromColors(
-        baseColor: Colors.grey.shade300,
-        highlightColor: Colors.grey.shade100,
-        child: Container(
+        // 👇 YE LINES PURPLE / EDGE ISSUE FIX KARTI HAIN
+        fadeInDuration: Duration.zero,
+        fadeOutDuration: Duration.zero,
+
+
+        memCacheHeight: 650,
+        memCacheWidth: 650,
+
+        placeholder: (_, __) => Container(
           height: height,
           width: width,
-          color: Colors.white,
+          color: Colors.grey.shade200, // ❌ white mat rakho
         ),
-      ),
-      errorWidget: (_, __, ___) => Container(
-        color: Colors.grey.shade200,
-        alignment: Alignment.center,
-        child: const Icon(Icons.error, color: Colors.grey),
+
+        errorWidget: (_, __, ___) => Container(
+          height: height,
+          width: width,
+          color: Colors.grey.shade200,
+          alignment: Alignment.center,
+          child: const Icon(Icons.broken_image, color: Colors.grey),
+        ),
       ),
     );
   }
+
 
   // ----------------------------------------------------------
   // UI START
@@ -131,7 +141,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                             color: Colors.black.withOpacity(0.15),
                             blurRadius: 20,
                             spreadRadius: 1,
-                            offset: const Offset(0, 8),
+                            offset: Offset(0, 8),
                           ),
                         ],
                       ),
@@ -141,11 +151,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                           controller.sliderImage,
                           height: 220,
                           width: double.infinity,
-                          fit: BoxFit.fill
-                          ,
+                          fit: BoxFit.fill,
                         ),
                       ),
-                    ),
+                    )
+,
 
                     const SizedBox(height: 22),
 
@@ -184,14 +194,16 @@ class _DashboardScreenState extends State<DashboardScreen>
                           return GestureDetector(
                             onTap: () {
                               Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ServiceCategoryDetailScreen(
-                                    slug: service.slug,
-                                    location: controller.selectedLocation,
-                                  ),
-                                ),
-                              );
+                                  context,
+                                  PageRouteBuilder(
+                                    transitionDuration: Duration(milliseconds: 350),
+                                    pageBuilder: (_, __, ___) => ServiceCategoryDetailScreen(slug: service.slug, location: controller.selectedLocation),
+                                    transitionsBuilder: (_, animation, __, child) {
+                                      final offset = Tween(begin: Offset(1, 0), end: Offset.zero)
+                                          .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+                                      return SlideTransition(position: offset, child: child);
+                                    },
+                                  ));
                             },
                             child: serviceCard(
                               title: service.title,
@@ -235,16 +247,16 @@ class _DashboardScreenState extends State<DashboardScreen>
                                     offer.url!.split("/").last;
 
                                 Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        ServiceCategoryDetailScreen(
-                                          slug: slug,
-                                          location:
-                                          controller.selectedLocation,
-                                        ),
-                                  ),
-                                );
+                                    context,
+                                    PageRouteBuilder(
+                                      transitionDuration: Duration(milliseconds: 350),
+                                      pageBuilder: (_, __, ___) => ServiceCategoryDetailScreen(slug:slug, location: controller.selectedLocation),
+                                      transitionsBuilder: (_, animation, __, child) {
+                                        final offset = Tween(begin: Offset(1, 0), end: Offset.zero)
+                                            .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+                                        return SlideTransition(position: offset, child: child);
+                                      },
+                                    ));
                               }
                             },
                             child: Container(
@@ -465,39 +477,44 @@ class _DashboardScreenState extends State<DashboardScreen>
 
                 // ---------------- CENTER BOTTOM TEXT ----------------
                 Positioned(
-                  bottom: 12,
-                  left: 0,
-                  right: 0,
+                  bottom: MediaQuery.of(context).size.width < 360 ? 8 : 12,
+                  left: 8,
+                  right: 8,
                   child: Center(
-                    child: Container(
-                      padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.35),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        title,
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.2,
-                          height: 1.2,
-                          shadows: [
-                            Shadow(
-                              blurRadius: 6,
-                              color: Colors.black54,
-                            ),
-                          ],
-                        ),
-                      ),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final width = MediaQuery.of(context).size.width;
+
+                        final double fontSize =
+                        width < 360 ? 12 : width < 600 ? 14 : 16;
+
+                        final int maxLines =
+                        width < 360 ? 2 : 3;
+
+                        return Text(
+                          title,
+                          textAlign: TextAlign.center,
+                          maxLines: maxLines,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: fontSize,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.2,
+                            height: 1.2,
+                            shadows: const [
+                              Shadow(
+                                blurRadius: 6,
+                                color: Colors.black54,
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
+
               ],
             ),
           ),

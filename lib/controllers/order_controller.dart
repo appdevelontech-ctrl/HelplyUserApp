@@ -87,43 +87,7 @@ class OrderController with ChangeNotifier {
     _isOrderDetailsLoading = false;
     if (!_isDisposed) notifyListeners();
   }
-  /// Update maid info for an order manually
-  void updateMaidInfo(String orderId, Map<String, dynamic> maidInfo) {
-    if (_isDisposed) return;
 
-    final index = _orders.indexWhere((o) => o.orderId.toString() == orderId);
-    if (index != -1) {
-      _orders[index] = _orders[index].copyWith(
-        maidName: maidInfo['maidName'] as String?,
-        maidPhone: maidInfo['maidPhone'] as String?,
-        maidEmail: maidInfo['maidEmail'] as String?,
-        maidLat: (maidInfo['maidLat'] is String)
-            ? double.tryParse(maidInfo['maidLat'] as String)
-            : (maidInfo['maidLat'] as num?)?.toDouble() ?? 0.0,
-        maidLng: (maidInfo['maidLng'] is String)
-            ? double.tryParse(maidInfo['maidLng'] as String)
-            : (maidInfo['maidLng'] as num?)?.toDouble() ?? 0.0,
-      );
-    }
-
-    final cachedOrder = _orderDetailsCache[orderId];
-    if (cachedOrder != null && cachedOrder.orderId.toString() == orderId) {
-      _orderDetailsCache[orderId] = cachedOrder.copyWith(
-        maidName: maidInfo['maidName'] as String?,
-        maidPhone: maidInfo['maidPhone'] as String?,
-        maidEmail: maidInfo['maidEmail'] as String?,
-        maidLat: (maidInfo['maidLat'] is String)
-            ? double.tryParse(maidInfo['maidLat'] as String)
-            : (maidInfo['maidLat'] as num?)?.toDouble() ?? 0.0,
-        maidLng: (maidInfo['maidLng'] is String)
-            ? double.tryParse(maidInfo['maidLng'] as String)
-            : (maidInfo['maidLng'] as num?)?.toDouble() ?? 0.0,
-      );
-    }
-
-    if (!_isDisposed) notifyListeners();
-  }
-  /// Update order status manually
   void updateOrderStatus(String orderId, int newStatus) {
     if (_isDisposed) return;
 
@@ -140,72 +104,6 @@ class OrderController with ChangeNotifier {
     if (!_isDisposed) notifyListeners();
   }
 
-  /// Update order status and maid info from socket
-  /// Update order status and maid info from socket
-  Future<void> updateOrderStatusFromSocket(
-      String orderId,
-      String status,
-      double lat,
-      double lng, {
-        required String maidName,
-        required String maidPhone,
-        required String maidEmail,
-      }) async {
-    if (_isDisposed) return;
-
-    int statusCode = _mapStatusToCode(status);
-    debugPrint(
-        '📡 Socket Update -> orderId: $orderId, status: $status ($statusCode), lat: $lat, lng: $lng, maid: $maidName');
-
-    // ✅ YAHAN PE MAIN BUG THA
-    // Pehle sirf o.orderId (227) se compare kar rahe the,
-    // jabki socket se Mongo ID (6938....) aa rahi hai.
-    final index = _orders.indexWhere(
-          (o) => o.id == orderId || o.orderId.toString() == orderId,
-    );
-
-    if (index != -1) {
-      _orders[index] = _orders[index].copyWith(
-        status: statusCode,
-        maidLat: lat,
-        maidLng: lng,
-        maidName: maidName,
-        maidPhone: maidPhone,
-        maidEmail: maidEmail,
-        updatedAt: DateTime.now().toIso8601String(),
-      );
-      debugPrint('✅ OrderController updated for orderId: $orderId');
-    } else {
-      debugPrint('⚠️ Order not found in list for id: $orderId');
-    }
-
-    // details cache update
-    if (_orderDetailsCache.containsKey(orderId)) {
-      final cachedOrder = _orderDetailsCache[orderId]!;
-      _orderDetailsCache[orderId] = cachedOrder.copyWith(
-        status: statusCode,
-        maidLat: lat,
-        maidLng: lng,
-        maidName: maidName,
-        maidPhone: maidPhone,
-        maidEmail: maidEmail,
-        updatedAt: DateTime.now().toIso8601String(),
-      );
-    }
-
-    // 🔐 per-user maid info save
-    await _saveMaidInfoToPrefs(orderId, {
-      'maidName': maidName,
-      'maidPhone': maidPhone,
-      'maidEmail': maidEmail,
-      'maidLat': lat,
-      'maidLng': lng,
-      'status': status,
-      'updatedAt': DateTime.now().toIso8601String(),
-    });
-
-    if (!_isDisposed) notifyListeners();
-  }
 
   /// Map status string to status code
   int _mapStatusToCode(String status) {

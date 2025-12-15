@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../services/storage_service.dart';
 import 'auth/login_screen.dart';
 
@@ -11,21 +12,23 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _controller = PageController();
   int currentPage = 0;
 
-  /// Only Images (No Title/Text needed because it's already in image)
-  final List<String> onboardingImages = [
-    "assets/imagesforscreen/4.jpg",
-    "assets/imagesforscreen/5.jpg",
+  final List<Map<String, String>> onboardingData = [
+    {
+      "image": "assets/images/maid1.jpg",
+      "title": "Find Trusted Maids",
+      "sub": "Search verified & trained household helpers near you."
+    },
+    {
+      "image": "assets/images/maid2.jpg",
+      "title": "Live Tracking",
+      "sub": "Track arrival & service status in real-time."
+    },
+    {
+      "image": "assets/images/maid3.jpg",
+      "title": "Secure & Reliable",
+      "sub": "All maids are identity verified and background checked."
+    },
   ];
-
-  Future<void> finishOnboarding() async {
-    await StorageService.markOnboardingDone();
-    if (!mounted) return;
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,94 +36,174 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: Stack(
         children: [
 
-          /// ---------- Fullscreen PageView Images ----------
+          /// ---------------- Background Pages ----------------
           PageView.builder(
             controller: _controller,
-            itemCount: onboardingImages.length,
             onPageChanged: (index) => setState(() => currentPage = index),
-            itemBuilder: (_, index) => Container(
-              decoration: BoxDecoration(
-                image: DecorationImage(
-                  image: AssetImage(onboardingImages[index]),
-                  fit: BoxFit.fill
-                  ,
+            itemCount: onboardingData.length,
+            itemBuilder: (_, index) {
+              return Stack(
+                children: [
+                  /// Full background image
+                  Positioned.fill(
+                    child: Image.asset(
+                      onboardingData[index]["image"]!,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+
+                  /// Black overlay gradient bottom
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.8),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  /// Text Section
+                  Positioned(
+                    bottom: 140,
+                    left: 25,
+                    right: 25,
+                    child: Column(
+                      children: [
+                        Text(
+                          onboardingData[index]["title"]!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            height: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          onboardingData[index]["sub"]!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.white.withOpacity(0.85),
+                          ),
+                        )
+                      ],
+                    ),
+                  )
+                ],
+              );
+            },
+          ),
+
+
+          /// ---------------- Skip Button ----------------
+          Positioned(
+            top: 55,
+            right: 25,
+            child: GestureDetector(
+              onTap: () async {
+                if (currentPage == onboardingData.length - 1) {
+                  await StorageService.markOnboardingDone();
+                  Navigator.push(context, MaterialPageRoute(builder: (context)=>LoginScreen()));
+                } else {
+                  _controller.jumpToPage(onboardingData.length - 1);
+                }
+              },
+              child: Text(
+                "Skip",
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.white.withOpacity(0.9),
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
           ),
 
-          /// ---------- Skip Button ----------
-          Positioned(
-            top: 50,
-            right: 20,
-            child: currentPage < onboardingImages.length - 1
-                ? GestureDetector(
-              onTap: () => _controller.jumpToPage(onboardingImages.length - 1),
-              child: const Text(
-                "Skip",
-                style: TextStyle(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.w600),
-              ),
-            )
-                : const SizedBox.shrink(),
-          ),
 
-          /// ---------- Indicators + Buttons ----------
+          /// ---------------- Indicators + Next/Get Started ----------------
           Positioned(
             bottom: 50,
             left: 0,
             right: 0,
             child: Column(
               children: [
-
-                /// --- Page Indicators ---
+                /// Dot Indicators
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: List.generate(
-                    onboardingImages.length,
+                    onboardingData.length,
                         (index) => AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
-                      height: 10,
-                      width: currentPage == index ? 28 : 10,
+                      height: 9,
+                      width: currentPage == index ? 26 : 9,
                       margin: const EdgeInsets.symmetric(horizontal: 4),
                       decoration: BoxDecoration(
-                        color: currentPage == index ? Colors.blue : Colors.grey,
-                        borderRadius: BorderRadius.circular(20),
+                        color: currentPage == index
+                            ? Colors.blueAccent
+                            : Colors.white54,
+                        borderRadius: BorderRadius.circular(25),
                       ),
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 25),
 
-                /// --- Next / Get Started Button ---
-                currentPage == onboardingImages.length - 1
-                    ? ElevatedButton(
-                  onPressed: finishOnboarding,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
+                /// Get Started / Next Buttons
+                currentPage == onboardingData.length - 1
+                    ? SizedBox(
+                  width: 220,
+                  height: 55,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(35),
+                      ),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 16),
+                    onPressed: () async {
+                      await StorageService.markOnboardingDone();
+                      Navigator.push(context, MaterialPageRoute(builder: (context)=>LoginScreen()));
+                    },
+                    child: const Text(
+                      "Get Started",
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold,color: Colors.white),
+                    ),
                   ),
-                  child: const Text("Get Started", style: TextStyle(fontSize: 18, color: Colors.white)),
                 )
-                    : ElevatedButton(
-                  onPressed: () {
+                    : GestureDetector(
+                  onTap: () {
                     _controller.nextPage(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    );
+                        duration: const Duration(milliseconds: 350),
+                        curve: Curves.easeInOut);
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
+                  child: Container(
+                    width: 190,
+                    height: 55,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(35),
+                      border: Border.all(color: Colors.white.withOpacity(0.8)),
+                      color: Colors.white.withOpacity(0.15),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 70, vertical: 16),
+                    alignment: Alignment.center,
+                    child: const Text(
+                      "Next",
+                      style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
-                  child: const Text("Next", style: TextStyle(fontSize: 18, color: Colors.white)),
-                ),
+                )
               ],
             ),
           ),

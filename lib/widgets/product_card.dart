@@ -12,6 +12,16 @@ class ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    // 🔹 Responsive breakpoints
+    final bool isSmall = screenWidth < 360;
+    final bool isTablet = screenWidth >= 600;
+
+    final double titleSize = isSmall ? 14 : isTablet ? 18 : 16;
+    final double featureSize = isSmall ? 12 : 14;
+    final double priceSize = isSmall ? 13 : 15;
+
     return Card(
       elevation: 6,
       shape: RoundedRectangleBorder(
@@ -23,77 +33,86 @@ class ProductCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         splashColor: Colors.green.withOpacity(0.3),
         child: LayoutBuilder(
-          builder: (cardContext, cardConstraints) {
+          builder: (context, constraints) {
+            final imageHeight = constraints.maxHeight * (isTablet ? 0.55 : 0.5);
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Image section
+                // ---------------- IMAGE ----------------
                 ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                  borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(12)),
                   child: CachedNetworkImage(
                     imageUrl: product.pImage,
-                    height: cardConstraints.maxHeight * 0.5,
+                    height: imageHeight,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    placeholder: (context, url) => Shimmer.fromColors(
+                    placeholder: (_, __) => Shimmer.fromColors(
                       baseColor: Colors.grey[300]!,
                       highlightColor: Colors.grey[100]!,
                       child: Container(
-                        height: cardConstraints.maxHeight * 0.5,
+                        height: imageHeight,
                         width: double.infinity,
                         color: Colors.grey[300],
                       ),
                     ),
-                    errorWidget: (context, url, error) => Image.asset(
+                    errorWidget: (_, __, ___) => Image.asset(
                       'assets/images/fallback_image.webp',
-                      height: cardConstraints.maxHeight * 0.5,
+                      height: imageHeight,
                       width: double.infinity,
                       fit: BoxFit.cover,
                     ),
                   ),
                 ),
-                // Content section
+
+                // ---------------- CONTENT ----------------
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.all(10.0),
+                    padding: EdgeInsets.all(isSmall ? 8 : 10),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        // Name
+                        // TITLE
                         Text(
                           product.title,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                            fontSize: titleSize,
                             color: Colors.black87,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
+
                         const SizedBox(height: 6),
-                        // Features (as description)
-                        Flexible(
-                          fit: FlexFit.tight,
+
+                        // FEATURES
+                        Expanded(
                           child: Text(
-                            product.features.isNotEmpty ? product.features.join(' ') : 'No features available',
+                            product.features.isNotEmpty
+                                ? product.features.join(' ')
+                                : 'No features available',
                             style: TextStyle(
-                              fontSize: 14,
+                              fontSize: featureSize,
                               color: Colors.grey[700],
                             ),
-                            maxLines: 2,
+                            maxLines: isSmall ? 2 : 3,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+
                         const SizedBox(height: 6),
-                        // Price
+
+                        // PRICE
                         Row(
                           children: [
                             Expanded(
                               child: Text(
                                 '₹${product.salePrice.toStringAsFixed(0)}',
                                 style: TextStyle(
-                                  fontSize: 14,
+                                  fontSize: priceSize,
                                   color: Colors.green[800],
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -102,12 +121,15 @@ class ProductCard extends StatelessWidget {
                               ),
                             ),
                             if (product.regularPrice > product.salePrice)
-                              Text(
-                                '₹${product.regularPrice.toStringAsFixed(0)}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                  decoration: TextDecoration.lineThrough,
+                              Padding(
+                                padding: const EdgeInsets.only(left: 4),
+                                child: Text(
+                                  '₹${product.regularPrice.toStringAsFixed(0)}',
+                                  style: TextStyle(
+                                    fontSize: priceSize - 2,
+                                    color: Colors.grey[600],
+                                    decoration: TextDecoration.lineThrough,
+                                  ),
                                 ),
                               ),
                           ],

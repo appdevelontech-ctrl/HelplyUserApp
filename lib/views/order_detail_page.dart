@@ -11,10 +11,13 @@ import 'package:share_plus/share_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import '../controllers/order_controller.dart';
+import 'live_tracking_page.dart';
 
 class OrderDetailsPage extends StatefulWidget {
   final String orderId;
   final OrderController orderController;
+
+
 
   const OrderDetailsPage({
     super.key,
@@ -22,18 +25,39 @@ class OrderDetailsPage extends StatefulWidget {
     required this.orderController,
   });
 
+
   @override
   State<OrderDetailsPage> createState() => _OrderDetailsPageState();
 }
 
-class _OrderDetailsPageState extends State<OrderDetailsPage> {
+class _OrderDetailsPageState extends State<OrderDetailsPage>
+    with SingleTickerProviderStateMixin {
+
   String? _errorMessage;
+  late AnimationController _liveBtnController;
+  late Animation<double> _pulseAnim;
+
 
   @override
   void initState() {
     super.initState();
     _fetchOrderDetails();
+    _liveBtnController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..repeat(reverse: true);
+
+    _pulseAnim = Tween<double>(begin: 0.9, end: 1.05).animate(
+      CurvedAnimation(parent: _liveBtnController, curve: Curves.easeInOut),
+    );
   }
+
+  @override
+  void dispose() {
+    _liveBtnController.dispose();
+    super.dispose();
+  }
+
 
   Future<void> _fetchOrderDetails() async {
     try {
@@ -52,6 +76,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       // Show error briefly without dismissing immediately to give user time to read
       EasyLoading.showError(_errorMessage!, duration: const Duration(seconds: 3));
     }
+
   }
 
   Future<void> _downloadInvoice(String invoiceId) async {
@@ -132,6 +157,100 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     }
   }
 
+  Widget _liveTrackPill(Order order) {
+    if (order.status != 5 || order.agent == null) return const SizedBox();
+
+    return AnimatedBuilder(
+      animation: _pulseAnim,
+      builder: (_, __) {
+        return Transform.scale(
+          scale: _pulseAnim.value,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(30),
+            onTap: () {
+              final agent = order.agent!;
+
+              if (agent.latitude == null ||
+                  agent.longitude == null ||
+                  order.orderLat == null ||
+                  order.orderLng == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("📍 Location not available yet")),
+                );
+                return;
+              }
+
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => LiveTrackingPage(
+                    // 🔹 REAL DB ID (socket + tracking ke liye)
+                    orderId: order.id.toString(),
+
+                    // 🔹 USER KO DIKHANE WALA ORDER NUMBER
+                    orderidNameForShow: order.orderId,
+
+                    // 🔹 MAID LOCATION
+                    maidLat: agent.latitude ?? 0.0,
+                    maidLng: agent.longitude ?? 0.0,
+
+                    // 🔹 ORDER LOCATION (FIXED ✅)
+                    orderLat: order.orderLat ?? 0.0,
+                    orderLng: order.orderLng ?? 0.0,
+
+                    // 🔹 MAID DETAILS (UI me dikhane ke liye)
+                    maidName: agent.username ?? "Maid",
+                    maidPhone: agent.phone ?? "N/A",
+
+
+                    // 🔹 ORDER STATUS
+                    orderStatus: order.status,
+                  ),
+                ),
+              );
+
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(color: Colors.blue.shade300),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 🔴 Blinking Dot
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(Icons.location_on, size: 16, color: Colors.blue),
+                  const SizedBox(width: 6),
+                  const Text(
+                    "LIVE TRACK",
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.blue,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
@@ -173,6 +292,9 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                     const SizedBox(height: 16),
                     if (order.items.isNotEmpty)
                       _styledCard(child: _buildItemList(order)),
+                    const SizedBox(height: 20),
+
+
                     const SizedBox(height: 20),
 
                     // Download Button styled
@@ -241,7 +363,15 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
               ]),
         ),
         const SizedBox(width: 10),
-        _buildStatusChip(order.status),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            _buildStatusChip(order.status),
+            const SizedBox(height: 6),
+            _liveTrackPill(order),
+          ],
+        ),
+
       ],
     );
   }
@@ -263,8 +393,6 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       ],
     );
   }
-
-  // 🎨 ORDER INFO UI
   Widget _buildOrderInfo(Order order) {
     final isPaid = order.payment == 1;
     final paymentStatus = isPaid ? "Paid" : "Pending";
@@ -275,26 +403,49 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       children: [
         _title("Payment & Order Summary"),
         const Divider(height: 15, thickness: 1),
+
         _row(
           "Payment Status",
           paymentStatus,
           icon: Icons.credit_card_outlined,
           valueStyle: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 15,
-              color: paymentColor,
-              backgroundColor: paymentColor.withOpacity(0.1)),
+            fontWeight: FontWeight.w800,
+            fontSize: 15,
+            color: paymentColor,
+            backgroundColor: paymentColor.withOpacity(0.1),
+          ),
         ),
+
         _row("Mode", order.mode, icon: Icons.payment_outlined),
-        if (order.otp != null) _row("OTP", order.otp.toString(), icon: Icons.security_outlined),
-        _row("Agent ID", order.agentId, icon: Icons.support_agent_outlined),
-        const Divider(height: 20, thickness: 1.5, color: Colors.black12),
-        _row("Shipping/Delivery Fee", "₹${order.shipping}", icon: Icons.local_shipping_outlined),
-        _row("Discount Applied", "₹${order.discount}", icon: Icons.discount_outlined),
-        _highlightedRow("Total Amount", "₹${order.totalAmount.toStringAsFixed(2)}", icon: Icons.monetization_on_outlined),
+
+        if (order.otp != null)
+          _row("OTP", order.otp.toString(), icon: Icons.security_outlined),
+
+        // ✅ SAFE AGENT CHECK
+        if (order.agent != null)
+          _row(
+            "Agent ID",
+            order.agent!.id.toString(),
+            icon: Icons.support_agent_outlined,
+          ),
+
+        const Divider(height: 20, thickness: 1.5),
+
+        _row("Shipping/Delivery Fee", "₹${order.shipping}",
+            icon: Icons.local_shipping_outlined),
+
+        _row("Discount Applied", "₹${order.discount}",
+            icon: Icons.discount_outlined),
+
+        _highlightedRow(
+          "Total Amount",
+          "₹${order.totalAmount.toStringAsFixed(2)}",
+          icon: Icons.monetization_on_outlined,
+        ),
       ],
     );
   }
+
 
   // 🎨 ITEM LIST UI
   Widget _buildItemList(Order order) {

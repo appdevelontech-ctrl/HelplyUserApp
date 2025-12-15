@@ -1,6 +1,8 @@
+import 'package:Helply/services/socketservice.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
+
 import 'controllers/home_conroller.dart';
 import 'controllers/socket_controller.dart';
 import 'controllers/cart_provider.dart';
@@ -17,6 +19,9 @@ void main() {
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider(
+          create: (_) => SocketLiveTrackingController(),
+        ),
         ChangeNotifierProvider(create: (_) => HomeController()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProvider(create: (_) => LocationController()),
@@ -43,13 +48,8 @@ class _MyAppState extends State<MyApp> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final socketController = context.read<SocketController>();
-      final orderController = context.read<OrderController>();
 
-      // Assign callback
-      socketController.onMaidStartedOrder = (orderId, maidInfo) {
-        orderController.updateMaidInfo(orderId, maidInfo);
-        debugPrint('✅ OrderController updated for orderId: $orderId');
-      };
+
 
       // Connect socket
       socketController.connect();

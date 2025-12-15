@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:user_app/models/service_category.dart';
+
+
+import '../models/service_category.dart';
 
 
 class ServiceCategoryController extends ChangeNotifier {
